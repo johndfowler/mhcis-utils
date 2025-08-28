@@ -1,0 +1,915 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.37.4.10188",
+      "templateHash": "14183892297460092142"
+    }
+  },
+  "definitions": {
+    "ContainerResources": {
+      "type": "object",
+      "properties": {
+        "cpu": {
+          "type": "string"
+        },
+        "memory": {
+          "type": "string"
+        }
+      },
+      "metadata": {
+        "description": "Container resource configuration"
+      }
+    },
+    "ServiceConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "bool"
+        },
+        "resources": {
+          "$ref": "#/definitions/ContainerResources"
+        },
+        "image": {
+          "type": "string"
+        },
+        "port": {
+          "type": "int"
+        }
+      },
+      "metadata": {
+        "description": "Service configuration"
+      }
+    },
+    "NetworkConfig": {
+      "type": "object",
+      "properties": {
+        "vnetAddressPrefix": {
+          "type": "string"
+        },
+        "subnetAddressPrefix": {
+          "type": "string"
+        },
+        "privateEndpointSubnetPrefix": {
+          "type": "string"
+        }
+      },
+      "metadata": {
+        "description": "Network configuration"
+      }
+    },
+    "MonitoringConfig": {
+      "type": "object",
+      "properties": {
+        "enableApplicationInsights": {
+          "type": "bool"
+        },
+        "enableDiagnostics": {
+          "type": "bool"
+        },
+        "logAnalyticsRetentionDays": {
+          "type": "int"
+        }
+      },
+      "metadata": {
+        "description": "Monitoring configuration"
+      }
+    }
+  },
+  "parameters": {
+    "prefix": {
+      "type": "string",
+      "defaultValue": "devops",
+      "minLength": 3,
+      "maxLength": 15,
+      "metadata": {
+        "description": "Resource name prefix (workload identifier). Lowercase letters/numbers only."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Deployment location."
+      }
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "allowedValues": [
+        "dev",
+        "test",
+        "staging",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Environment (dev, test, staging, prod)"
+      }
+    },
+    "regionAbbr": {
+      "type": "string",
+      "defaultValue": "eus",
+      "minLength": 2,
+      "maxLength": 4,
+      "metadata": {
+        "description": "Region abbreviation (e.g., eus for East US, weu for West Europe)"
+      }
+    },
+    "instance": {
+      "type": "string",
+      "defaultValue": "01",
+      "minLength": 2,
+      "maxLength": 3,
+      "metadata": {
+        "description": "Instance number (01, 02, etc.)"
+      }
+    },
+    "networkConfig": {
+      "$ref": "#/definitions/NetworkConfig",
+      "defaultValue": {
+        "vnetAddressPrefix": "10.0.0.0/16",
+        "subnetAddressPrefix": "10.0.1.0/24",
+        "privateEndpointSubnetPrefix": "10.0.2.0/24"
+      },
+      "metadata": {
+        "description": "Network configuration for the platform"
+      }
+    },
+    "monitoringConfig": {
+      "$ref": "#/definitions/MonitoringConfig",
+      "defaultValue": {
+        "enableApplicationInsights": true,
+        "enableDiagnostics": true,
+        "logAnalyticsRetentionDays": 30
+      },
+      "metadata": {
+        "description": "Monitoring and observability configuration"
+      }
+    },
+    "monitoringService": {
+      "$ref": "#/definitions/ServiceConfig",
+      "defaultValue": {
+        "enabled": true,
+        "resources": {
+          "cpu": "0.5",
+          "memory": "1Gi"
+        },
+        "image": "louislam/uptime-kuma:1.23.11",
+        "port": 3001
+      },
+      "metadata": {
+        "description": "Core monitoring service configuration (Uptime Kuma)"
+      }
+    },
+    "visualizationService": {
+      "$ref": "#/definitions/ServiceConfig",
+      "defaultValue": {
+        "enabled": false,
+        "resources": {
+          "cpu": "0.5",
+          "memory": "1Gi"
+        },
+        "image": "grafana/grafana:10.4.0",
+        "port": 3000
+      },
+      "metadata": {
+        "description": "Visualization service configuration (Grafana)"
+      }
+    },
+    "fileManagementService": {
+      "$ref": "#/definitions/ServiceConfig",
+      "defaultValue": {
+        "enabled": false,
+        "resources": {
+          "cpu": "0.25",
+          "memory": "0.5Gi"
+        },
+        "image": "filebrowser/filebrowser:v2.27.0",
+        "port": 80
+      },
+      "metadata": {
+        "description": "File management service configuration (Filebrowser)"
+      }
+    },
+    "developmentService": {
+      "$ref": "#/definitions/ServiceConfig",
+      "defaultValue": {
+        "enabled": false,
+        "resources": {
+          "cpu": "0.5",
+          "memory": "1Gi"
+        },
+        "image": "codercom/code-server:4.20.1",
+        "port": 8080
+      },
+      "metadata": {
+        "description": "Remote development service configuration (Code Server)"
+      }
+    },
+    "isTestMode": {
+      "type": "bool",
+      "defaultValue": "[or(equals(parameters('environment'), 'dev'), equals(parameters('environment'), 'test'))]",
+      "metadata": {
+        "description": "Enable test mode: reduces resources for cost optimization"
+      }
+    },
+    "enablePrivateEndpoints": {
+      "type": "bool",
+      "defaultValue": "[or(equals(parameters('environment'), 'prod'), equals(parameters('environment'), 'staging'))]",
+      "metadata": {
+        "description": "Enable private endpoints for enhanced security"
+      }
+    }
+  },
+  "variables": {
+    "workload": "[parameters('prefix')]",
+    "commonTags": {
+      "environment": "[parameters('environment')]",
+      "project": "cloud-devops-platform",
+      "workload": "[variables('workload')]",
+      "owner": "devops-team",
+      "costCenter": "engineering",
+      "createdBy": "bicep-template",
+      "version": "1.0.0"
+    },
+    "resourceNames": {
+      "managedIdentity": "[format('id-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "keyVault": "[format('kv-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "storageAccount": "[toLower(format('st{0}{1}{2}{3}', take(variables('workload'), 6), take(parameters('environment'), 3), parameters('regionAbbr'), parameters('instance')))]",
+      "fileShare": "[format('fs-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "virtualNetwork": "[format('vnet-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "subnet": "[format('snet-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "privateEndpointSubnet": "[format('snet-pe-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "containerAppsEnvironment": "[format('cae-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "logAnalytics": "[format('log-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "applicationInsights": "[format('appi-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "monitoring": "[format('ca-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "visualization": "[format('ca-grafana-{0}-{1}-{2}', parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "fileManagement": "[format('ca-filebrowser-{0}-{1}-{2}', parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
+      "development": "[format('ca-codeserver-{0}-{1}-{2}', parameters('environment'), parameters('regionAbbr'), parameters('instance'))]"
+    },
+    "storageMountName": "platform-data",
+    "keyVaultSecretsOfficerRoleId": "b86a8fe4-44ce-4948-aee5-eccb2c155cd7",
+    "storageFileDataSmbShareContributorRoleId": "0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb"
+  },
+  "resources": {
+    "vnet": {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2023-05-01",
+      "name": "[variables('resourceNames').virtualNetwork]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('networkConfig').vnetAddressPrefix]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('resourceNames').subnet]",
+            "properties": {
+              "addressPrefix": "[parameters('networkConfig').subnetAddressPrefix]",
+              "delegations": [
+                {
+                  "name": "Microsoft.App/environments",
+                  "properties": {
+                    "serviceName": "Microsoft.App/environments"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "[variables('resourceNames').privateEndpointSubnet]",
+            "properties": {
+              "addressPrefix": "[parameters('networkConfig').privateEndpointSubnetPrefix]",
+              "privateEndpointNetworkPolicies": "Disabled"
+            }
+          }
+        ]
+      }
+    },
+    "managedIdentity": {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('resourceNames').managedIdentity]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]"
+    },
+    "keyVault": {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2023-07-01",
+      "name": "[variables('resourceNames').keyVault]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[tenant().tenantId]",
+        "enableRbacAuthorization": true,
+        "enabledForDeployment": false,
+        "enabledForDiskEncryption": false,
+        "enabledForTemplateDeployment": true,
+        "enableSoftDelete": true,
+        "softDeleteRetentionInDays": 7,
+        "enablePurgeProtection": "[if(equals(parameters('environment'), 'prod'), true(), false())]",
+        "publicNetworkAccess": "[if(parameters('enablePrivateEndpoints'), 'Disabled', 'Enabled')]",
+        "networkAcls": "[if(parameters('enablePrivateEndpoints'), createObject('bypass', 'AzureServices', 'defaultAction', 'Deny'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'))]"
+      }
+    },
+    "keyVaultRoleAssignment": {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.KeyVault/vaults/{0}', variables('resourceNames').keyVault)]",
+      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('resourceNames').keyVault), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity), variables('keyVaultSecretsOfficerRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsOfficerRoleId'))]",
+        "principalId": "[reference('managedIdentity').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "keyVault",
+        "managedIdentity"
+      ]
+    },
+    "logAnalytics": {
+      "condition": "[parameters('monitoringConfig').enableApplicationInsights]",
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[variables('resourceNames').logAnalytics]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": "[parameters('monitoringConfig').logAnalyticsRetentionDays]",
+        "features": {
+          "enableLogAccessUsingOnlyResourcePermissions": true
+        }
+      }
+    },
+    "applicationInsights": {
+      "condition": "[parameters('monitoringConfig').enableApplicationInsights]",
+      "type": "Microsoft.Insights/components",
+      "apiVersion": "2020-02-02",
+      "name": "[variables('resourceNames').applicationInsights]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "kind": "web",
+      "properties": {
+        "Application_Type": "web",
+        "WorkspaceResourceId": "[if(parameters('monitoringConfig').enableApplicationInsights, resourceId('Microsoft.OperationalInsights/workspaces', variables('resourceNames').logAnalytics), null())]",
+        "IngestionMode": "LogAnalytics",
+        "publicNetworkAccessForIngestion": "Enabled",
+        "publicNetworkAccessForQuery": "Enabled"
+      },
+      "dependsOn": [
+        "logAnalytics"
+      ]
+    },
+    "storageAccount": {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('resourceNames').storageAccount]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "sku": {
+        "name": "[if(equals(parameters('environment'), 'prod'), 'Standard_GRS', 'Standard_LRS')]"
+      },
+      "kind": "StorageV2",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity))]": {}
+        }
+      },
+      "properties": {
+        "accessTier": "Hot",
+        "allowBlobPublicAccess": false,
+        "allowSharedKeyAccess": false,
+        "largeFileSharesState": "Enabled",
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "networkAcls": "[if(parameters('enablePrivateEndpoints'), createObject('bypass', 'AzureServices', 'defaultAction', 'Deny'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'))]",
+        "encryption": {
+          "services": {
+            "blob": {
+              "enabled": true
+            },
+            "file": {
+              "enabled": true
+            }
+          },
+          "keySource": "Microsoft.Storage",
+          "requireInfrastructureEncryption": "[equals(parameters('environment'), 'prod')]"
+        }
+      },
+      "dependsOn": [
+        "managedIdentity"
+      ]
+    },
+    "storageRoleAssignment": {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('resourceNames').storageAccount)]",
+      "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('resourceNames').storageAccount), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity), variables('storageFileDataSmbShareContributorRoleId'))]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('storageFileDataSmbShareContributorRoleId'))]",
+        "principalId": "[reference('managedIdentity').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "managedIdentity",
+        "storageAccount"
+      ]
+    },
+    "fileShare": {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-01-01",
+      "name": "[format('{0}/default/{1}', variables('resourceNames').storageAccount, variables('resourceNames').fileShare)]",
+      "properties": {
+        "accessTier": "TransactionOptimized",
+        "enabledProtocols": "SMB",
+        "shareQuota": "[if(equals(parameters('environment'), 'prod'), 5120, 1024)]"
+      },
+      "dependsOn": [
+        "storageAccount"
+      ]
+    },
+    "containerAppsEnvironment": {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('resourceNames').containerAppsEnvironment]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('commonTags')]",
+      "properties": {
+        "vnetConfiguration": {
+          "internal": "[parameters('enablePrivateEndpoints')]",
+          "infrastructureSubnetId": "[format('{0}/subnets/{1}', resourceId('Microsoft.Network/virtualNetworks', variables('resourceNames').virtualNetwork), variables('resourceNames').subnet)]"
+        },
+        "appLogsConfiguration": "[if(parameters('monitoringConfig').enableApplicationInsights, createObject('destination', 'log-analytics', 'logAnalyticsConfiguration', createObject('customerId', reference('logAnalytics').customerId, 'sharedKey', listKeys('logAnalytics', '2023-09-01').primarySharedKey)), createObject('destination', 'log-analytics'))]",
+        "workloadProfiles": [
+          {
+            "name": "Consumption",
+            "workloadProfileType": "Consumption"
+          }
+        ]
+      },
+      "dependsOn": [
+        "logAnalytics",
+        "vnet"
+      ]
+    },
+    "environmentStorage": {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', variables('resourceNames').containerAppsEnvironment, variables('storageMountName'))]",
+      "properties": {
+        "azureFile": {
+          "accessMode": "ReadWrite",
+          "accountName": "[variables('resourceNames').storageAccount]",
+          "shareName": "[variables('resourceNames').fileShare]"
+        }
+      },
+      "dependsOn": [
+        "containerAppsEnvironment",
+        "fileShare",
+        "storageAccount",
+        "storageRoleAssignment"
+      ]
+    },
+    "grafanaPasswordSecret": {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/{1}', variables('resourceNames').keyVault, 'grafana-admin-password')]",
+      "properties": {
+        "value": "[format('ChangeMe123!{0}', uniqueString(resourceGroup().id))]",
+        "contentType": "text/plain"
+      },
+      "dependsOn": [
+        "keyVault",
+        "keyVaultRoleAssignment"
+      ]
+    },
+    "codeServerPasswordSecret": {
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2023-07-01",
+      "name": "[format('{0}/{1}', variables('resourceNames').keyVault, 'codeserver-password')]",
+      "properties": {
+        "value": "[format('DevSecure456!{0}', uniqueString(resourceGroup().id))]",
+        "contentType": "text/plain"
+      },
+      "dependsOn": [
+        "keyVault",
+        "keyVaultRoleAssignment"
+      ]
+    },
+    "monitoringApp": {
+      "condition": "[parameters('monitoringService').enabled]",
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('resourceNames').monitoring]",
+      "location": "[parameters('location')]",
+      "tags": "[union(variables('commonTags'), createObject('service', 'monitoring'))]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity))]": {}
+        }
+      },
+      "properties": {
+        "environmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('resourceNames').containerAppsEnvironment)]",
+        "configuration": {
+          "ingress": {
+            "external": true,
+            "targetPort": "[parameters('monitoringService').port]",
+            "transport": "auto",
+            "traffic": [
+              {
+                "latestRevision": true,
+                "weight": 100
+              }
+            ]
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "uptime-kuma",
+              "image": "[parameters('monitoringService').image]",
+              "resources": {
+                "cpu": "[json(if(parameters('isTestMode'), '0.25', parameters('monitoringService').resources.cpu))]",
+                "memory": "[if(parameters('isTestMode'), '0.5Gi', parameters('monitoringService').resources.memory)]"
+              },
+              "env": "[if(parameters('monitoringConfig').enableApplicationInsights, createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', reference('applicationInsights').ConnectionString)), createArray())]",
+              "volumeMounts": [
+                {
+                  "volumeName": "[variables('storageMountName')]",
+                  "mountPath": "/app/data"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "readiness",
+                  "tcpSocket": {
+                    "port": "[parameters('monitoringService').port]"
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 10,
+                  "failureThreshold": 3
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[if(parameters('isTestMode'), 0, 1)]",
+            "maxReplicas": "[if(parameters('isTestMode'), 1, 3)]"
+          },
+          "volumes": [
+            {
+              "name": "[variables('storageMountName')]",
+              "storageType": "AzureFile",
+              "storageName": "[variables('storageMountName')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "applicationInsights",
+        "containerAppsEnvironment",
+        "environmentStorage",
+        "managedIdentity"
+      ]
+    },
+    "grafanaApp": {
+      "condition": "[parameters('visualizationService').enabled]",
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('resourceNames').visualization]",
+      "location": "[parameters('location')]",
+      "tags": "[union(variables('commonTags'), createObject('service', 'visualization'))]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity))]": {}
+        }
+      },
+      "properties": {
+        "environmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('resourceNames').containerAppsEnvironment)]",
+        "configuration": {
+          "ingress": {
+            "external": true,
+            "targetPort": "[parameters('visualizationService').port]",
+            "transport": "auto",
+            "traffic": [
+              {
+                "latestRevision": true,
+                "weight": 100
+              }
+            ]
+          },
+          "secrets": [
+            {
+              "name": "grafana-password",
+              "keyVaultUrl": "[format('{0}secrets/grafana-admin-password', reference('keyVault').vaultUri)]",
+              "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity)]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "grafana",
+              "image": "[parameters('visualizationService').image]",
+              "resources": {
+                "cpu": "[json(if(parameters('isTestMode'), '0.25', parameters('visualizationService').resources.cpu))]",
+                "memory": "[if(parameters('isTestMode'), '0.5Gi', parameters('visualizationService').resources.memory)]"
+              },
+              "env": [
+                {
+                  "name": "GF_SECURITY_ADMIN_USER",
+                  "value": "admin"
+                },
+                {
+                  "name": "GF_SECURITY_ADMIN_PASSWORD",
+                  "secretRef": "grafana-password"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "[variables('storageMountName')]",
+                  "mountPath": "/var/lib/grafana",
+                  "subPath": "grafana"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "readiness",
+                  "httpGet": {
+                    "path": "/api/health",
+                    "port": "[parameters('visualizationService').port]"
+                  },
+                  "initialDelaySeconds": 30,
+                  "periodSeconds": 10,
+                  "failureThreshold": 3
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[if(parameters('isTestMode'), 0, 1)]",
+            "maxReplicas": "[if(parameters('isTestMode'), 1, 2)]"
+          },
+          "volumes": [
+            {
+              "name": "[variables('storageMountName')]",
+              "storageType": "AzureFile",
+              "storageName": "[variables('storageMountName')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "containerAppsEnvironment",
+        "environmentStorage",
+        "grafanaPasswordSecret",
+        "keyVault",
+        "managedIdentity"
+      ]
+    },
+    "filebrowserApp": {
+      "condition": "[parameters('fileManagementService').enabled]",
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('resourceNames').fileManagement]",
+      "location": "[parameters('location')]",
+      "tags": "[union(variables('commonTags'), createObject('service', 'file-management'))]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity))]": {}
+        }
+      },
+      "properties": {
+        "environmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('resourceNames').containerAppsEnvironment)]",
+        "configuration": {
+          "ingress": {
+            "external": true,
+            "targetPort": "[parameters('fileManagementService').port]",
+            "transport": "auto",
+            "traffic": [
+              {
+                "latestRevision": true,
+                "weight": 100
+              }
+            ]
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "filebrowser",
+              "image": "[parameters('fileManagementService').image]",
+              "resources": {
+                "cpu": "[json(if(parameters('isTestMode'), '0.25', parameters('fileManagementService').resources.cpu))]",
+                "memory": "[if(parameters('isTestMode'), '0.5Gi', parameters('fileManagementService').resources.memory)]"
+              },
+              "env": [
+                {
+                  "name": "FB_BASEURL",
+                  "value": "/"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "[variables('storageMountName')]",
+                  "mountPath": "/srv",
+                  "subPath": "files"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "readiness",
+                  "httpGet": {
+                    "path": "/",
+                    "port": "[parameters('fileManagementService').port]"
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 10,
+                  "failureThreshold": 3
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[if(parameters('isTestMode'), 0, 1)]",
+            "maxReplicas": 1
+          },
+          "volumes": [
+            {
+              "name": "[variables('storageMountName')]",
+              "storageType": "AzureFile",
+              "storageName": "[variables('storageMountName')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "containerAppsEnvironment",
+        "environmentStorage",
+        "managedIdentity"
+      ]
+    },
+    "codeServerApp": {
+      "condition": "[parameters('developmentService').enabled]",
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[variables('resourceNames').development]",
+      "location": "[parameters('location')]",
+      "tags": "[union(variables('commonTags'), createObject('service', 'remote-development'))]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity))]": {}
+        }
+      },
+      "properties": {
+        "environmentId": "[resourceId('Microsoft.App/managedEnvironments', variables('resourceNames').containerAppsEnvironment)]",
+        "configuration": {
+          "ingress": {
+            "external": true,
+            "targetPort": "[parameters('developmentService').port]",
+            "transport": "auto",
+            "traffic": [
+              {
+                "latestRevision": true,
+                "weight": 100
+              }
+            ]
+          },
+          "secrets": [
+            {
+              "name": "codeserver-password",
+              "keyVaultUrl": "[format('{0}secrets/codeserver-password', reference('keyVault').vaultUri)]",
+              "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity)]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "code-server",
+              "image": "[parameters('developmentService').image]",
+              "resources": {
+                "cpu": "[json(if(parameters('isTestMode'), '0.25', parameters('developmentService').resources.cpu))]",
+                "memory": "[if(parameters('isTestMode'), '0.5Gi', parameters('developmentService').resources.memory)]"
+              },
+              "env": [
+                {
+                  "name": "PASSWORD",
+                  "secretRef": "codeserver-password"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "[variables('storageMountName')]",
+                  "mountPath": "/home/coder",
+                  "subPath": "code-server"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "readiness",
+                  "httpGet": {
+                    "path": "/",
+                    "port": "[parameters('developmentService').port]"
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 10,
+                  "failureThreshold": 3
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[if(parameters('isTestMode'), 0, 1)]",
+            "maxReplicas": 1
+          },
+          "volumes": [
+            {
+              "name": "[variables('storageMountName')]",
+              "storageType": "AzureFile",
+              "storageName": "[variables('storageMountName')]"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "codeServerPasswordSecret",
+        "containerAppsEnvironment",
+        "environmentStorage",
+        "keyVault",
+        "managedIdentity"
+      ]
+    }
+  },
+  "outputs": {
+    "platformEndpoints": {
+      "type": "object",
+      "metadata": {
+        "description": "Platform service endpoints and management information"
+      },
+      "value": {
+        "monitoringService": "[if(parameters('monitoringService').enabled, format('https://{0}.{1}', variables('resourceNames').monitoring, reference('containerAppsEnvironment').defaultDomain), '')]",
+        "visualizationService": "[if(parameters('visualizationService').enabled, format('https://{0}.{1}', variables('resourceNames').visualization, reference('containerAppsEnvironment').defaultDomain), '')]",
+        "fileManagementService": "[if(parameters('fileManagementService').enabled, format('https://{0}.{1}', variables('resourceNames').fileManagement, reference('containerAppsEnvironment').defaultDomain), '')]",
+        "developmentService": "[if(parameters('developmentService').enabled, format('https://{0}.{1}', variables('resourceNames').development, reference('containerAppsEnvironment').defaultDomain), '')]"
+      }
+    },
+    "resourceInfo": {
+      "type": "object",
+      "metadata": {
+        "description": "Resource identifiers for management and integration"
+      },
+      "value": {
+        "resourceGroupName": "[resourceGroup().name]",
+        "managedIdentityId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity)]",
+        "keyVaultName": "[variables('resourceNames').keyVault]",
+        "storageAccountName": "[variables('resourceNames').storageAccount]",
+        "containerAppsEnvironmentName": "[variables('resourceNames').containerAppsEnvironment]",
+        "applicationInsightsName": "[if(parameters('monitoringConfig').enableApplicationInsights, variables('resourceNames').applicationInsights, '')]",
+        "logAnalyticsWorkspaceName": "[if(parameters('monitoringConfig').enableApplicationInsights, variables('resourceNames').logAnalytics, '')]"
+      }
+    },
+    "securityInfo": {
+      "type": "object",
+      "metadata": {
+        "description": "Security and access information"
+      },
+      "value": {
+        "keyVaultUri": "[reference('keyVault').vaultUri]",
+        "managedIdentityClientId": "[reference('managedIdentity').clientId]",
+        "storageAccountEndpoints": "[reference('storageAccount').primaryEndpoints]"
+      }
+    },
+    "managementCommands": {
+      "type": "object",
+      "metadata": {
+        "description": "Management commands for platform operations"
+      },
+      "value": {
+        "deleteResourceGroup": "[format('az group delete --name {0} --yes --no-wait', resourceGroup().name)]",
+        "viewLogs": "[if(parameters('monitoringConfig').enableApplicationInsights, format('az monitor app-insights query --app {0} --analytics-query \"requests | limit 10\"', variables('resourceNames').applicationInsights), '')]",
+        "connectToKeyVault": "[format('az keyvault secret list --vault-name {0}', variables('resourceNames').keyVault)]",
+        "storageAccountKey": "Disabled - Using managed identity authentication"
+      }
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "prefix": {
+      "value": "devops"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "regionAbbr": {
+      "value": "eus"
+    },
+    "instance": {
+      "value": "01"
+    },
+    "networkConfig": {
+      "value": {
+        "vnetAddressPrefix": "10.0.0.0/16",
+        "subnetAddressPrefix": "10.0.1.0/24",
+        "privateEndpointSubnetPrefix": "10.0.2.0/24"
+      }
+    },
+    "monitoringConfig": {
+      "value": {
+        "enableApplicationInsights": true,
+        "enableDiagnostics": true,
+        "logAnalyticsRetentionDays": 30
+      }
+    },
+    "monitoringService": {
+      "value": {
+        "enabled": true,
+        "resources": {
+          "cpu": "0.5",
+          "memory": "1Gi"
+        },
+        "image": "louislam/uptime-kuma:1.23.11",
+        "port": 3001
+      }
+    },
+    "visualizationService": {
+      "value": {
+        "enabled": false,
+        "resources": {
+          "cpu": "0.5",
+          "memory": "1Gi"
+        },
+        "image": "grafana/grafana:10.4.0",
+        "port": 3000
+      }
+    },
+    "fileManagementService": {
+      "value": {
+        "enabled": false,
+        "resources": {
+          "cpu": "0.25",
+          "memory": "0.5Gi"
+        },
+        "image": "filebrowser/filebrowser:v2.27.0",
+        "port": 80
+      }
+    },
+    "developmentService": {
+      "value": {
+        "enabled": false,
+        "resources": {
+          "cpu": "0.5",
+          "memory": "1Gi"
+        },
+        "image": "codercom/code-server:4.20.1",
+        "port": 8080
+      }
+    },
+    "isTestMode": {
+      "value": true
+    },
+    "enablePrivateEndpoints": {
+      "value": false
+    }
+  }
+}

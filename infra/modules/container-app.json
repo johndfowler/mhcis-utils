@@ -1,0 +1,227 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.37.4.10188",
+      "templateHash": "4314059859026209860"
+    }
+  },
+  "parameters": {
+    "name": {
+      "type": "string",
+      "metadata": {
+        "description": "Container app name"
+      }
+    },
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Deployment location"
+      }
+    },
+    "tags": {
+      "type": "object",
+      "metadata": {
+        "description": "Resource tags"
+      }
+    },
+    "environmentId": {
+      "type": "string",
+      "metadata": {
+        "description": "Container Apps environment ID"
+      }
+    },
+    "image": {
+      "type": "string",
+      "metadata": {
+        "description": "Container image"
+      }
+    },
+    "targetPort": {
+      "type": "int",
+      "metadata": {
+        "description": "Target port for the container"
+      }
+    },
+    "resources": {
+      "type": "object",
+      "metadata": {
+        "description": "CPU and memory resources"
+      }
+    },
+    "environmentVariables": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Environment variables"
+      }
+    },
+    "secrets": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Secret references"
+      }
+    },
+    "volumeMounts": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Volume mounts"
+      }
+    },
+    "volumes": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Volumes"
+      }
+    },
+    "managedIdentityId": {
+      "type": "string",
+      "metadata": {
+        "description": "Managed identity resource ID"
+      }
+    },
+    "minReplicas": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": "Minimum replicas"
+      }
+    },
+    "maxReplicas": {
+      "type": "int",
+      "defaultValue": 3,
+      "metadata": {
+        "description": "Maximum replicas"
+      }
+    },
+    "enableApplicationInsights": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable Application Insights"
+      }
+    },
+    "applicationInsightsConnectionString": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Application Insights connection string"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('name')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', parameters('managedIdentityId'))]": {}
+        }
+      },
+      "properties": {
+        "environmentId": "[parameters('environmentId')]",
+        "configuration": {
+          "ingress": {
+            "external": true,
+            "targetPort": "[parameters('targetPort')]",
+            "traffic": [
+              {
+                "latestRevision": true,
+                "weight": 100
+              }
+            ],
+            "transport": "auto"
+          },
+          "secrets": "[parameters('secrets')]"
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "main",
+              "image": "[parameters('image')]",
+              "resources": {
+                "cpu": "[json(parameters('resources').cpu)]",
+                "memory": "[parameters('resources').memory]"
+              },
+              "env": "[union(parameters('environmentVariables'), if(parameters('enableApplicationInsights'), createArray(createObject('name', 'APPLICATIONINSIGHTS_CONNECTION_STRING', 'value', parameters('applicationInsightsConnectionString'))), createArray()))]",
+              "volumeMounts": "[parameters('volumeMounts')]",
+              "probes": [
+                {
+                  "type": "readiness",
+                  "httpGet": {
+                    "path": "/",
+                    "port": "[parameters('targetPort')]"
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 3,
+                  "timeoutSeconds": 10
+                },
+                {
+                  "type": "liveness",
+                  "httpGet": {
+                    "path": "/",
+                    "port": "[parameters('targetPort')]"
+                  },
+                  "initialDelaySeconds": 30,
+                  "periodSeconds": 30,
+                  "successThreshold": 1,
+                  "failureThreshold": 3,
+                  "timeoutSeconds": 10
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('minReplicas')]",
+            "maxReplicas": "[parameters('maxReplicas')]",
+            "rules": [
+              {
+                "name": "http-scaling",
+                "http": {
+                  "metadata": {
+                    "concurrentRequests": "50"
+                  }
+                }
+              }
+            ]
+          },
+          "volumes": "[parameters('volumes')]"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "fqdn": {
+      "type": "string",
+      "metadata": {
+        "description": "Container app FQDN"
+      },
+      "value": "[reference(resourceId('Microsoft.App/containerApps', parameters('name')), '2024-03-01').configuration.ingress.fqdn]"
+    },
+    "id": {
+      "type": "string",
+      "metadata": {
+        "description": "Container app resource ID"
+      },
+      "value": "[resourceId('Microsoft.App/containerApps', parameters('name'))]"
+    },
+    "name": {
+      "type": "string",
+      "metadata": {
+        "description": "Container app name"
+      },
+      "value": "[parameters('name')]"
+    }
+  }
+}

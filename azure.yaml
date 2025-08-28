@@ -1,0 +1,12 @@
+# azure.yaml
+# Azure Developer CLI (azd) configuration for Cloud-Native DevOps Platform
+
+name: cloud-devops-platform
+metadata:
+  template: cloud-devops-platform@0.0.1-beta
+
+# Configure the Azure resources
+infra:
+  provider: bicep
+  path: ./infra
+  resourceGroupName: "rg-devops-platform"

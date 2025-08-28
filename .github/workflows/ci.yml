@@ -1,0 +1,137 @@
+name: Code Quality Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint-and-validate:
+    name: Lint and Validate Code
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js for markdownlint
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Install Azure CLI
+      run: |
+        curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+    - name: Install Bicep CLI
+      run: |
+        az bicep install
+
+    - name: Install additional tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq python3-yaml
+
+    - name: Install markdownlint-cli
+      run: |
+        npm install -g markdownlint-cli
+
+    - name: Run comprehensive linting
+      run: |
+        echo "🔍 Running comprehensive linting..."
+        chmod +x scripts/lint.sh
+        ./scripts/lint.sh --ci
+
+    - name: Validate azure.yaml configuration
+      run: |
+        echo "🔍 Validating azure.yaml..."
+        if [ ! -f "azure.yaml" ]; then
+          echo "❌ azure.yaml not found"
+          exit 1
+        fi
+
+        # Basic YAML validation
+        if ! python3 -c "import yaml; yaml.safe_load(open('azure.yaml'))"; then
+          echo "❌ azure.yaml has invalid YAML"
+          exit 1
+        fi
+
+        # Check for required sections
+        if ! grep -q "name:" azure.yaml; then
+          echo "❌ azure.yaml missing name section"
+          exit 1
+        fi
+
+        echo "✅ azure.yaml is valid"
+
+    - name: Validate deployment parameters
+      run: |
+        echo "🔍 Validating deployment parameters..."
+        if [ ! -f "infra/main.parameters.json" ]; then
+          echo "❌ infra/main.parameters.json not found"
+          exit 1
+        fi
+
+        # Validate JSON structure
+        if ! jq empty infra/main.parameters.json; then
+          echo "❌ main.parameters.json has invalid JSON"
+          exit 1
+        fi
+
+        # Check for required parameters
+        if ! jq '.parameters | has("prefix") and has("environment") and has("regionAbbr")' infra/main.parameters.json > /dev/null; then
+          echo "❌ main.parameters.json missing required parameters"
+          exit 1
+        fi
+
+        echo "✅ Deployment parameters are valid"
+
+    - name: Validate Bicep templates build
+      run: |
+        echo "🔍 Validating Bicep template builds..."
+        for file in infra/*.bicep infra/modules/*.bicep; do
+          if [ -f "$file" ]; then
+            echo "📝 Building: $file"
+            if ! az bicep build --file "$file" --stdout > /dev/null; then
+              echo "❌ Failed to build $file"
+              exit 1
+            fi
+            echo "✅ $file builds successfully"
+          fi
+        done
+
+    - name: Check for security issues
+      run: |
+        echo "🔍 Checking for potential security issues..."
+
+        # Check for hardcoded secrets in Bicep files
+        if grep -r "password\|secret\|key\|token" infra/*.bicep | grep -v "secretRef\|keyVault\|managedIdentity"; then
+          echo "⚠️  Potential hardcoded secrets found:"
+          grep -r "password\|secret\|key\|token" infra/*.bicep | grep -v "secretRef\|keyVault\|managedIdentity"
+        fi
+
+        # Check for HTTP URLs (should be HTTPS)
+        if grep -r "http://" infra/*.bicep; then
+          echo "⚠️  HTTP URLs found (should use HTTPS):"
+          grep -r "http://" infra/*.bicep
+        fi
+
+        echo "✅ Security check completed"
+
+    - name: Generate build summary
+      run: |
+        echo "📊 Build Summary:" > build-summary.txt
+        echo "- Bicep files validated: $(find infra -name '*.bicep' | wc -l)" >> build-summary.txt
+        echo "- JSON files validated: $(find . -name '*.json' -not -path './.git/*' | wc -l)" >> build-summary.txt
+        echo "- YAML files validated: $(find . -name '*.yaml' -not -path './.git/*' | wc -l)" >> build-summary.txt
+        echo "- Markdown files validated: $(find . -name '*.md' -not -path './.git/*' | wc -l)" >> build-summary.txt
+        echo "" >> build-summary.txt
+        echo "✅ All validations passed!" >> build-summary.txt
+        cat build-summary.txt
+
+    - name: Upload build summary
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-summary
+        path: build-summary.txt

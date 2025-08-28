@@ -1,0 +1,215 @@
+name: Infrastructure Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'infra/**'
+      - '.bicepconfig.json'
+      - '.markdownlint.json'
+      - 'scripts/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'infra/**'
+      - '.bicepconfig.json'
+      - '.markdownlint.json'
+      - 'scripts/**'
+
+jobs:
+  validate-infrastructure:
+    name: Validate Infrastructure Code
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Install Azure CLI
+      run: |
+        curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+    - name: Install Bicep CLI
+      run: |
+        az bicep install
+
+    - name: Install jq for JSON validation
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
+
+    - name: Install markdownlint-cli
+      run: |
+        npm install -g markdownlint-cli
+
+    - name: Validate Bicep templates
+      run: |
+        echo "🔍 Validating Bicep templates..."
+        find infra -name "*.bicep" -type f | while read -r file; do
+          echo "📝 Checking: $file"
+
+          # Lint the file
+          if ! az bicep lint --file "$file"; then
+            echo "❌ Bicep linting failed for $file"
+            exit 1
+          fi
+
+          # Build the file
+          if ! az bicep build --file "$file"; then
+            echo "❌ Bicep build failed for $file"
+            exit 1
+          fi
+
+          echo "✅ $file passed validation"
+        done
+
+    - name: Validate JSON files
+      run: |
+        echo "📄 Validating JSON files..."
+        find . -name "*.json" -not -path "./.git/*" -not -path "./node_modules/*" -type f | while read -r file; do
+          echo "🔍 Checking: $file"
+          if ! jq empty "$file"; then
+            echo "❌ Invalid JSON in $file"
+            exit 1
+          fi
+          echo "✅ $file is valid JSON"
+        done
+
+    - name: Validate YAML files
+      run: |
+        echo "📋 Validating YAML files..."
+        find . -name "*.yaml" -not -path "./.git/*" -type f | while read -r file; do
+          echo "🔍 Checking: $file"
+          if ! python3 -c "import yaml; yaml.safe_load(open('$file'))"; then
+            echo "❌ Invalid YAML in $file"
+            exit 1
+          fi
+          echo "✅ $file is valid YAML"
+        done
+
+    - name: Validate Markdown files
+      run: |
+        echo "📖 Validating Markdown files..."
+        find . -name "*.md" -not -path "./.git/*" -type f | while read -r file; do
+          echo "🔍 Checking: $file"
+          if ! markdownlint "$file"; then
+            echo "❌ Markdown linting failed for $file"
+            exit 1
+          fi
+          echo "✅ $file passed markdown linting"
+        done
+
+    - name: Run linting script (CI mode)
+      run: |
+        echo "🔍 Running comprehensive linting script..."
+        chmod +x scripts/lint.sh
+        if ! ./scripts/lint.sh --ci; then
+          echo "❌ Linting script failed"
+          exit 1
+        fi
+
+    - name: Validate azure.yaml configuration
+      run: |
+        echo "🔍 Validating azure.yaml configuration..."
+        if [ ! -f "azure.yaml" ]; then
+          echo "❌ azure.yaml not found"
+          exit 1
+        fi
+
+        # Basic validation that it's not empty and has required sections
+        if ! grep -q "name:" azure.yaml; then
+          echo "❌ azure.yaml missing name section"
+          exit 1
+        fi
+
+        if ! grep -q "infra:" azure.yaml; then
+          echo "❌ azure.yaml missing infra section"
+          exit 1
+        fi
+
+        echo "✅ azure.yaml configuration is valid"
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: validate-infrastructure
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  deploy-validation:
+    name: Deployment Validation
+    runs-on: ubuntu-latest
+    needs: validate-infrastructure
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Login to Azure
+      uses: azure/login@v2
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Validate deployment parameters
+      run: |
+        echo "🔍 Validating deployment parameters..."
+
+        # Check if main.parameters.json exists
+        if [ ! -f "infra/main.parameters.json" ]; then
+          echo "❌ infra/main.parameters.json not found"
+          exit 1
+        fi
+
+        # Validate parameter file structure
+        if ! jq '.parameters | has("prefix") and has("environment") and has("regionAbbr")' infra/main.parameters.json > /dev/null; then
+          echo "❌ main.parameters.json missing required parameters"
+          exit 1
+        fi
+
+        echo "✅ Deployment parameters are valid"
+
+    - name: Validate template deployment (what-if)
+      run: |
+        echo "🔍 Validating template deployment..."
+
+        # Create a temporary resource group for validation
+        TEMP_RG="validation-rg-$(date +%s)"
+        az group create --name "$TEMP_RG" --location "eastus" --tags "temporary=true" "purpose=validation"
+
+        # Run what-if deployment
+        if ! az deployment group what-if \
+          --resource-group "$TEMP_RG" \
+          --template-file infra/main.bicep \
+          --parameters infra/main.parameters.json \
+          --no-pretty-print; then
+          echo "❌ Template validation failed"
+          az group delete --name "$TEMP_RG" --yes --no-wait
+          exit 1
+        fi
+
+        # Clean up temporary resource group
+        az group delete --name "$TEMP_RG" --yes --no-wait
+
+        echo "✅ Template deployment validation passed"

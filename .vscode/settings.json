@@ -1,0 +1,24 @@
+{
+  "bicep.enableAutoCompletions": true,
+  "bicep.enableParamCompletion": true,
+  "bicep.enableOutputCompletion": true,
+  "bicep.enableVariableCompletion": true,
+  "bicep.enableResourceCompletion": true,
+  "bicep.enableModuleCompletion": true,
+  "bicep.enableFunctionCompletion": true,
+  "bicep.enablePropertyCompletion": true,
+  "bicep.enableDecoratorCompletion": true,
+  "bicep.trace.server": "Verbose",
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit"
+  },
+  "files.associations": {
+    "*.bicep": "bicep"
+  },
+  "editor.quickSuggestions": {
+    "strings": true
+  },
+  "bicep.completions.getAllFunctionCompletions": true,
+  "bicep.completions.getResourceSnippets": true
+}
