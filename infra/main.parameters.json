@@ -3,7 +3,7 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "prefix": {
-      "value": "devops"
+      "value": "mhcis"
     },
     "environment": {
       "value": "dev"
@@ -17,7 +17,7 @@
     "networkConfig": {
       "value": {
         "vnetAddressPrefix": "10.0.0.0/16",
-        "subnetAddressPrefix": "10.0.1.0/24",
+        "subnetAddressPrefix": "10.0.0.0/23",
         "privateEndpointSubnetPrefix": "10.0.2.0/24"
       }
     },

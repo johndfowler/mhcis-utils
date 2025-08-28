@@ -82,7 +82,7 @@
   "parameters": {
     "prefix": {
       "type": "string",
-      "defaultValue": "devops",
+      "defaultValue": "dev",
       "minLength": 3,
       "maxLength": 15,
       "metadata": {
@@ -99,12 +99,7 @@
     "environment": {
       "type": "string",
       "defaultValue": "dev",
-      "allowedValues": [
-        "dev",
-        "test",
-        "staging",
-        "prod"
-      ],
+      "allowedValues": ["dev", "test", "staging", "prod"],
       "metadata": {
         "description": "Environment (dev, test, staging, prod)"
       }
@@ -228,9 +223,9 @@
     "workload": "[parameters('prefix')]",
     "commonTags": {
       "environment": "[parameters('environment')]",
-      "project": "cloud-devops-platform",
+      "project": "dev-team",
       "workload": "[variables('workload')]",
-      "owner": "devops-team",
+      "owner": "dev-team",
       "costCenter": "engineering",
       "createdBy": "bicep-template",
       "version": "1.0.0"
@@ -264,9 +259,7 @@
       "tags": "[variables('commonTags')]",
       "properties": {
         "addressSpace": {
-          "addressPrefixes": [
-            "[parameters('networkConfig').vnetAddressPrefix]"
-          ]
+          "addressPrefixes": ["[parameters('networkConfig').vnetAddressPrefix]"]
         },
         "subnets": [
           {
@@ -333,10 +326,7 @@
         "principalId": "[reference('managedIdentity').principalId]",
         "principalType": "ServicePrincipal"
       },
-      "dependsOn": [
-        "keyVault",
-        "managedIdentity"
-      ]
+      "dependsOn": ["keyVault", "managedIdentity"]
     },
     "logAnalytics": {
       "condition": "[parameters('monitoringConfig').enableApplicationInsights]",
@@ -370,9 +360,7 @@
         "publicNetworkAccessForIngestion": "Enabled",
         "publicNetworkAccessForQuery": "Enabled"
       },
-      "dependsOn": [
-        "logAnalytics"
-      ]
+      "dependsOn": ["logAnalytics"]
     },
     "storageAccount": {
       "type": "Microsoft.Storage/storageAccounts",
@@ -411,9 +399,7 @@
           "requireInfrastructureEncryption": "[equals(parameters('environment'), 'prod')]"
         }
       },
-      "dependsOn": [
-        "managedIdentity"
-      ]
+      "dependsOn": ["managedIdentity"]
     },
     "storageRoleAssignment": {
       "type": "Microsoft.Authorization/roleAssignments",
@@ -425,10 +411,7 @@
         "principalId": "[reference('managedIdentity').principalId]",
         "principalType": "ServicePrincipal"
       },
-      "dependsOn": [
-        "managedIdentity",
-        "storageAccount"
-      ]
+      "dependsOn": ["managedIdentity", "storageAccount"]
     },
     "fileShare": {
       "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
@@ -439,9 +422,7 @@
         "enabledProtocols": "SMB",
         "shareQuota": "[if(equals(parameters('environment'), 'prod'), 5120, 1024)]"
       },
-      "dependsOn": [
-        "storageAccount"
-      ]
+      "dependsOn": ["storageAccount"]
     },
     "containerAppsEnvironment": {
       "type": "Microsoft.App/managedEnvironments",
@@ -462,10 +443,7 @@
           }
         ]
       },
-      "dependsOn": [
-        "logAnalytics",
-        "vnet"
-      ]
+      "dependsOn": ["logAnalytics", "vnet"]
     },
     "environmentStorage": {
       "type": "Microsoft.App/managedEnvironments/storages",
@@ -493,10 +471,7 @@
         "value": "[format('ChangeMe123!{0}', uniqueString(resourceGroup().id))]",
         "contentType": "text/plain"
       },
-      "dependsOn": [
-        "keyVault",
-        "keyVaultRoleAssignment"
-      ]
+      "dependsOn": ["keyVault", "keyVaultRoleAssignment"]
     },
     "codeServerPasswordSecret": {
       "type": "Microsoft.KeyVault/vaults/secrets",
@@ -506,10 +481,7 @@
         "value": "[format('DevSecure456!{0}', uniqueString(resourceGroup().id))]",
         "contentType": "text/plain"
       },
-      "dependsOn": [
-        "keyVault",
-        "keyVaultRoleAssignment"
-      ]
+      "dependsOn": ["keyVault", "keyVaultRoleAssignment"]
     },
     "monitoringApp": {
       "condition": "[parameters('monitoringService').enabled]",

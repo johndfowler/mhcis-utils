@@ -1,8 +1,8 @@
 // ===========================================
-// Cloud-Native DevOps Platform - Main Template
+// Shad - Cloud-Native Utility Platform - Main Template
 // ===========================================
-// This is the main Bicep template that orchestrates the deployment of a comprehensive 
-// cloud-native development and monitoring platform in Azure Container Apps.
+// This is the main Bicep template that orchestrates the deployment of a comprehensive
+// cloud-native utility platform in Azure Container Apps.
 
 targetScope = 'resourceGroup'
 
@@ -45,7 +45,7 @@ type MonitoringConfig = {
 @description('Resource name prefix (workload identifier). Lowercase letters/numbers only.')
 @minLength(3)
 @maxLength(15)
-param prefix string = 'devops'
+param prefix string = 'mhcis'
 
 @description('Deployment location.')
 param location string = resourceGroup().location
@@ -135,9 +135,9 @@ param enablePrivateEndpoints bool = environment == 'prod' || environment == 'sta
 var workload = prefix
 var commonTags = {
   environment: environment
-  project: 'cloud-devops-platform'
+  project: 'dev-platform'
   workload: workload
-  owner: 'devops-team'
+  owner: 'dev-team'
   costCenter: 'engineering'
   createdBy: 'bicep-template'
   version: '1.0.0'
@@ -146,8 +146,8 @@ var commonTags = {
 // Resource names following CAF conventions
 var resourceNames = {
   managedIdentity: 'id-${workload}-${environment}-${regionAbbr}-${instance}'
-  keyVault: 'kv-${workload}-${environment}-${regionAbbr}-${instance}'
-  storageAccount: toLower('st${take(workload, 6)}${take(environment, 3)}${regionAbbr}${instance}')
+  keyVault: 'kv${toLower(take(uniqueString(resourceGroup().id), 16))}'
+  storageAccount: 'st${toLower(take(uniqueString(resourceGroup().id), 18))}'
   fileShare: 'fs-${workload}-${environment}-${regionAbbr}-${instance}'
   virtualNetwork: 'vnet-${workload}-${environment}-${regionAbbr}-${instance}'
   subnet: 'snet-${workload}-${environment}-${regionAbbr}-${instance}'
@@ -162,7 +162,6 @@ var resourceNames = {
 }
 
 var storageMountName = 'platform-data'
-var keyVaultSecretsOfficerRoleId = 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'
 var storageFileDataSmbShareContributorRoleId = '0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb'
 
 // ===========================================
@@ -182,14 +181,6 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
         name: resourceNames.subnet
         properties: {
           addressPrefix: networkConfig.subnetAddressPrefix
-          delegations: [
-            {
-              name: 'Microsoft.App/environments'
-              properties: {
-                serviceName: 'Microsoft.App/environments'
-              }
-            }
-          ]
         }
       }
       {
@@ -223,32 +214,27 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
       name: 'standard'
     }
     tenantId: tenant().tenantId
-    enableRbacAuthorization: true
+    enableRbacAuthorization: false
     enabledForDeployment: false
     enabledForDiskEncryption: false
     enabledForTemplateDeployment: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
-    enablePurgeProtection: environment == 'prod' ? true : false
-    publicNetworkAccess: enablePrivateEndpoints ? 'Disabled' : 'Enabled'
-    networkAcls: enablePrivateEndpoints ? {
-      bypass: 'AzureServices'
-      defaultAction: 'Deny'
-    } : {
-      bypass: 'AzureServices' 
-      defaultAction: 'Allow'
-    }
-  }
-}
-
-// Grant Key Vault access to managed identity
-resource keyVaultRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, managedIdentity.id, keyVaultSecretsOfficerRoleId)
-  scope: keyVault
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', keyVaultSecretsOfficerRoleId)
-    principalId: managedIdentity.properties.principalId
-    principalType: 'ServicePrincipal'
+    enablePurgeProtection: true
+    publicNetworkAccess: 'Enabled'
+    accessPolicies: [
+      {
+        tenantId: tenant().tenantId
+        objectId: managedIdentity.properties.principalId
+        permissions: {
+          secrets: [
+            'get'
+            'list'
+            'set'
+          ]
+        }
+      }
+    ]
   }
 }
 
@@ -365,21 +351,6 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
       internal: enablePrivateEndpoints
       infrastructureSubnetId: '${vnet.id}/subnets/${resourceNames.subnet}'
     }
-    appLogsConfiguration: monitoringConfig.enableApplicationInsights ? {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: logAnalytics.properties.customerId
-        sharedKey: logAnalytics.listKeys().primarySharedKey
-      }
-    } : {
-      destination: 'log-analytics'
-    }
-    workloadProfiles: [
-      {
-        name: 'Consumption'
-        workloadProfileType: 'Consumption'
-      }
-    ]
   }
 }
 
@@ -411,9 +382,6 @@ resource grafanaPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = 
     value: 'ChangeMe123!${uniqueString(resourceGroup().id)}'
     contentType: 'text/plain'
   }
-  dependsOn: [
-    keyVaultRoleAssignment
-  ]
 }
 
 resource codeServerPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
@@ -423,9 +391,6 @@ resource codeServerPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01'
     value: 'DevSecure456!${uniqueString(resourceGroup().id)}'
     contentType: 'text/plain'
   }
-  dependsOn: [
-    keyVaultRoleAssignment
-  ]
 }
 
 // ===========================================

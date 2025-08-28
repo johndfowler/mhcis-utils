@@ -1,6 +1,6 @@
-# Cloud-Native DevOps Platform
+# Shad - Cloud-Native Utility Platform
 
-A comprehensive, security-hardened DevOps platform built on Azure Container Apps with monitoring, visualization, file management, and remote development capabilities.
+A comprehensive, security-hardened utility platform built on Azure Container Apps with monitoring, visualization, file management, and remote development capabilities.
 
 ## 🏗️ Architecture Overview
 
@@ -65,11 +65,11 @@ azd up
 
 ```bash
 # Create resource group
-az group create --name rg-devops-dev-eus-01 --location eastus
+az group create --name rg-shad-dev-eus-01 --location eastus
 
 # Deploy infrastructure
 az deployment group create \
-  --resource-group rg-devops-dev-eus-01 \
+  --resource-group rg-shad-dev-eus-01 \
   --template-file infra/main.bicep \
   --parameters infra/main.parameters.json
 ```
@@ -80,7 +80,7 @@ az deployment group create \
 
 Configure the platform through parameters in `infra/main.parameters.json`:
 
-- `prefix`: Resource name prefix (default: "devops")
+- `prefix`: Resource name prefix (configurable)
 - `environment`: Target environment (dev/test/staging/prod)
 - `regionAbbr`: Azure region abbreviation
 - `monitoringService.enabled`: Enable Uptime Kuma monitoring
@@ -102,7 +102,7 @@ Each service can be independently enabled/disabled and configured:
 - `isTestMode`: Reduce resources for development/testing
 - Key Vault soft delete and purge protection settings
 
-## 🎛️ Platform Services
+## 🎛️ Utility Services
 
 ### Uptime Kuma (Default)
 
@@ -194,25 +194,25 @@ Following Azure CAF standards:
 ### View Deployed Resources
 
 ```bash
-az resource list --resource-group rg-devops-dev-eus-01 --output table
+az resource list --resource-group rg-shad-dev-eus-01 --output table
 ```
 
 ### Access Key Vault Secrets
 
 ```bash
-az keyvault secret list --vault-name kv-devops-dev-eus-01
+az keyvault secret list --vault-name kv-shad-dev-eus-01
 ```
 
 ### View Application Logs
 
 ```bash
-az containerapp logs show --name ca-devops-dev-eus-01 --resource-group rg-devops-dev-eus-01
+az containerapp logs show --name ca-shad-dev-eus-01 --resource-group rg-shad-dev-eus-01
 ```
 
 ### Monitor with Application Insights
 
 ```bash
-az monitor app-insights query --app appi-devops-dev-eus-01 --analytics-query "requests | limit 10"
+az monitor app-insights query --app appi-shad-dev-eus-01 --analytics-query "requests | limit 10"
 ```
 
 ## 🧹 Cleanup
@@ -220,7 +220,7 @@ az monitor app-insights query --app appi-devops-dev-eus-01 --analytics-query "re
 ### Remove All Resources
 
 ```bash
-az group delete --name rg-devops-dev-eus-01 --yes --no-wait
+az group delete --name rg-shad-dev-eus-01 --yes --no-wait
 ```
 
 ## 📈 Scaling & Production
@@ -240,12 +240,12 @@ This template follows Azure best practices and is designed for extensibility:
 
 - Add new services by creating additional container app modules
 - Extend security with additional Key Vault secrets
-- Implement CI/CD with the included Azure DevOps pipeline configuration
+- Implement CI/CD with Azure DevOps or GitHub Actions
 - Customize networking with additional subnets or private endpoints
 
 ## 📝 Version History
 
-- **1.0.0**: Initial comprehensive platform with security hardening
+- **1.0.0**: Initial comprehensive utility platform with security hardening
   - Managed identity authentication
   - Key Vault integration
   - VNet isolation
