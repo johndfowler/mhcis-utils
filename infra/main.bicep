@@ -1,5 +1,5 @@
 // ===========================================
-// Shad - Cloud-Native Utility Platform - Main Template
+// Shade - Cloud-Native Utility Platform - Main Template
 // ===========================================
 // This is the main Bicep template that orchestrates the deployment of a comprehensive
 // cloud-native utility platform in Azure Container Apps.
@@ -45,7 +45,7 @@ type MonitoringConfig = {
 @description('Resource name prefix (workload identifier). Lowercase letters/numbers only.')
 @minLength(3)
 @maxLength(15)
-param prefix string = 'mhcis'
+param prefix string = 'shade'
 
 @description('Deployment location.')
 param location string = resourceGroup().location
@@ -135,7 +135,7 @@ param enablePrivateEndpoints bool = environment == 'prod' || environment == 'sta
 var workload = prefix
 var commonTags = {
   environment: environment
-  project: 'dev-platform'
+  project: 'shade-platform'
   workload: workload
   owner: 'dev-team'
   costCenter: 'engineering'

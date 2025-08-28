@@ -1,4 +1,8 @@
-# Shad - Cloud-Native Utility Platform
+# Shade - Cloud-Native Utility Platform
+
+<p align="center">
+  <img src="assets/logo/shade-logo.png" alt="Shade Logo" width="200"/>
+</p>
 
 A comprehensive, security-hardened utility platform built on Azure Container Apps with monitoring, visualization, file management, and remote development capabilities.
 
@@ -65,11 +69,11 @@ azd up
 
 ```bash
 # Create resource group
-az group create --name rg-shad-dev-eus-01 --location eastus
+az group create --name rg-shade-dev-eus-01 --location eastus
 
 # Deploy infrastructure
 az deployment group create \
-  --resource-group rg-shad-dev-eus-01 \
+  --resource-group rg-shade-dev-eus-01 \
   --template-file infra/main.bicep \
   --parameters infra/main.parameters.json
 ```
@@ -194,25 +198,25 @@ Following Azure CAF standards:
 ### View Deployed Resources
 
 ```bash
-az resource list --resource-group rg-shad-dev-eus-01 --output table
+az resource list --resource-group rg-shade-dev-eus-01 --output table
 ```
 
 ### Access Key Vault Secrets
 
 ```bash
-az keyvault secret list --vault-name kv-shad-dev-eus-01
+az keyvault secret list --vault-name kv-shade-dev-eus-01
 ```
 
 ### View Application Logs
 
 ```bash
-az containerapp logs show --name ca-shad-dev-eus-01 --resource-group rg-shad-dev-eus-01
+az containerapp logs show --name ca-shade-dev-eus-01 --resource-group rg-shade-dev-eus-01
 ```
 
 ### Monitor with Application Insights
 
 ```bash
-az monitor app-insights query --app appi-shad-dev-eus-01 --analytics-query "requests | limit 10"
+az monitor app-insights query --app appi-shade-dev-eus-01 --analytics-query "requests | limit 10"
 ```
 
 ## 🧹 Cleanup
@@ -220,7 +224,7 @@ az monitor app-insights query --app appi-shad-dev-eus-01 --analytics-query "requ
 ### Remove All Resources
 
 ```bash
-az group delete --name rg-shad-dev-eus-01 --yes --no-wait
+az group delete --name rg-shade-dev-eus-01 --yes --no-wait
 ```
 
 ## 📈 Scaling & Production

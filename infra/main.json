@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.37.4.10188",
-      "templateHash": "14183892297460092142"
+      "templateHash": "17022211762028707898"
     }
   },
   "definitions": {
@@ -82,7 +82,7 @@
   "parameters": {
     "prefix": {
       "type": "string",
-      "defaultValue": "dev",
+      "defaultValue": "shade",
       "minLength": 3,
       "maxLength": 15,
       "metadata": {
@@ -99,7 +99,12 @@
     "environment": {
       "type": "string",
       "defaultValue": "dev",
-      "allowedValues": ["dev", "test", "staging", "prod"],
+      "allowedValues": [
+        "dev",
+        "test",
+        "staging",
+        "prod"
+      ],
       "metadata": {
         "description": "Environment (dev, test, staging, prod)"
       }
@@ -223,7 +228,7 @@
     "workload": "[parameters('prefix')]",
     "commonTags": {
       "environment": "[parameters('environment')]",
-      "project": "dev-team",
+      "project": "shade-platform",
       "workload": "[variables('workload')]",
       "owner": "dev-team",
       "costCenter": "engineering",
@@ -232,8 +237,8 @@
     },
     "resourceNames": {
       "managedIdentity": "[format('id-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
-      "keyVault": "[format('kv-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
-      "storageAccount": "[toLower(format('st{0}{1}{2}{3}', take(variables('workload'), 6), take(parameters('environment'), 3), parameters('regionAbbr'), parameters('instance')))]",
+      "keyVault": "[format('kv{0}', toLower(take(uniqueString(resourceGroup().id), 16)))]",
+      "storageAccount": "[format('st{0}', toLower(take(uniqueString(resourceGroup().id), 18)))]",
       "fileShare": "[format('fs-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
       "virtualNetwork": "[format('vnet-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
       "subnet": "[format('snet-{0}-{1}-{2}-{3}', variables('workload'), parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
@@ -247,7 +252,6 @@
       "development": "[format('ca-codeserver-{0}-{1}-{2}', parameters('environment'), parameters('regionAbbr'), parameters('instance'))]"
     },
     "storageMountName": "platform-data",
-    "keyVaultSecretsOfficerRoleId": "b86a8fe4-44ce-4948-aee5-eccb2c155cd7",
     "storageFileDataSmbShareContributorRoleId": "0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb"
   },
   "resources": {
@@ -259,21 +263,15 @@
       "tags": "[variables('commonTags')]",
       "properties": {
         "addressSpace": {
-          "addressPrefixes": ["[parameters('networkConfig').vnetAddressPrefix]"]
+          "addressPrefixes": [
+            "[parameters('networkConfig').vnetAddressPrefix]"
+          ]
         },
         "subnets": [
           {
             "name": "[variables('resourceNames').subnet]",
             "properties": {
-              "addressPrefix": "[parameters('networkConfig').subnetAddressPrefix]",
-              "delegations": [
-                {
-                  "name": "Microsoft.App/environments",
-                  "properties": {
-                    "serviceName": "Microsoft.App/environments"
-                  }
-                }
-              ]
+              "addressPrefix": "[parameters('networkConfig').subnetAddressPrefix]"
             }
           },
           {
@@ -305,28 +303,31 @@
           "name": "standard"
         },
         "tenantId": "[tenant().tenantId]",
-        "enableRbacAuthorization": true,
+        "enableRbacAuthorization": false,
         "enabledForDeployment": false,
         "enabledForDiskEncryption": false,
         "enabledForTemplateDeployment": true,
         "enableSoftDelete": true,
         "softDeleteRetentionInDays": 7,
-        "enablePurgeProtection": "[if(equals(parameters('environment'), 'prod'), true(), false())]",
-        "publicNetworkAccess": "[if(parameters('enablePrivateEndpoints'), 'Disabled', 'Enabled')]",
-        "networkAcls": "[if(parameters('enablePrivateEndpoints'), createObject('bypass', 'AzureServices', 'defaultAction', 'Deny'), createObject('bypass', 'AzureServices', 'defaultAction', 'Allow'))]"
-      }
-    },
-    "keyVaultRoleAssignment": {
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "scope": "[format('Microsoft.KeyVault/vaults/{0}', variables('resourceNames').keyVault)]",
-      "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('resourceNames').keyVault), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity), variables('keyVaultSecretsOfficerRoleId'))]",
-      "properties": {
-        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsOfficerRoleId'))]",
-        "principalId": "[reference('managedIdentity').principalId]",
-        "principalType": "ServicePrincipal"
+        "enablePurgeProtection": true,
+        "publicNetworkAccess": "Enabled",
+        "accessPolicies": [
+          {
+            "tenantId": "[tenant().tenantId]",
+            "objectId": "[reference('managedIdentity').principalId]",
+            "permissions": {
+              "secrets": [
+                "get",
+                "list",
+                "set"
+              ]
+            }
+          }
+        ]
       },
-      "dependsOn": ["keyVault", "managedIdentity"]
+      "dependsOn": [
+        "managedIdentity"
+      ]
     },
     "logAnalytics": {
       "condition": "[parameters('monitoringConfig').enableApplicationInsights]",
@@ -360,7 +361,9 @@
         "publicNetworkAccessForIngestion": "Enabled",
         "publicNetworkAccessForQuery": "Enabled"
       },
-      "dependsOn": ["logAnalytics"]
+      "dependsOn": [
+        "logAnalytics"
+      ]
     },
     "storageAccount": {
       "type": "Microsoft.Storage/storageAccounts",
@@ -399,7 +402,9 @@
           "requireInfrastructureEncryption": "[equals(parameters('environment'), 'prod')]"
         }
       },
-      "dependsOn": ["managedIdentity"]
+      "dependsOn": [
+        "managedIdentity"
+      ]
     },
     "storageRoleAssignment": {
       "type": "Microsoft.Authorization/roleAssignments",
@@ -411,7 +416,10 @@
         "principalId": "[reference('managedIdentity').principalId]",
         "principalType": "ServicePrincipal"
       },
-      "dependsOn": ["managedIdentity", "storageAccount"]
+      "dependsOn": [
+        "managedIdentity",
+        "storageAccount"
+      ]
     },
     "fileShare": {
       "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
@@ -422,7 +430,9 @@
         "enabledProtocols": "SMB",
         "shareQuota": "[if(equals(parameters('environment'), 'prod'), 5120, 1024)]"
       },
-      "dependsOn": ["storageAccount"]
+      "dependsOn": [
+        "storageAccount"
+      ]
     },
     "containerAppsEnvironment": {
       "type": "Microsoft.App/managedEnvironments",
@@ -434,16 +444,11 @@
         "vnetConfiguration": {
           "internal": "[parameters('enablePrivateEndpoints')]",
           "infrastructureSubnetId": "[format('{0}/subnets/{1}', resourceId('Microsoft.Network/virtualNetworks', variables('resourceNames').virtualNetwork), variables('resourceNames').subnet)]"
-        },
-        "appLogsConfiguration": "[if(parameters('monitoringConfig').enableApplicationInsights, createObject('destination', 'log-analytics', 'logAnalyticsConfiguration', createObject('customerId', reference('logAnalytics').customerId, 'sharedKey', listKeys('logAnalytics', '2023-09-01').primarySharedKey)), createObject('destination', 'log-analytics'))]",
-        "workloadProfiles": [
-          {
-            "name": "Consumption",
-            "workloadProfileType": "Consumption"
-          }
-        ]
+        }
       },
-      "dependsOn": ["logAnalytics", "vnet"]
+      "dependsOn": [
+        "vnet"
+      ]
     },
     "environmentStorage": {
       "type": "Microsoft.App/managedEnvironments/storages",
@@ -471,7 +476,9 @@
         "value": "[format('ChangeMe123!{0}', uniqueString(resourceGroup().id))]",
         "contentType": "text/plain"
       },
-      "dependsOn": ["keyVault", "keyVaultRoleAssignment"]
+      "dependsOn": [
+        "keyVault"
+      ]
     },
     "codeServerPasswordSecret": {
       "type": "Microsoft.KeyVault/vaults/secrets",
@@ -481,7 +488,9 @@
         "value": "[format('DevSecure456!{0}', uniqueString(resourceGroup().id))]",
         "contentType": "text/plain"
       },
-      "dependsOn": ["keyVault", "keyVaultRoleAssignment"]
+      "dependsOn": [
+        "keyVault"
+      ]
     },
     "monitoringApp": {
       "condition": "[parameters('monitoringService').enabled]",
