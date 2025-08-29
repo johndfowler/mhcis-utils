@@ -2,9 +2,16 @@
   "analyzers": {
     "core": {
       "enabled": true,
+      "verbose": false,
       "rules": {
+        "adminusername-should-not-be-literal": {
+          "level": "warning"
+        },
         "no-hardcoded-env-urls": {
           "level": "warning"
+        },
+        "no-hardcoded-location": {
+          "level": "off"
         },
         "no-unused-params": {
           "level": "warning"
@@ -12,14 +19,83 @@
         "no-unused-vars": {
           "level": "warning"
         },
+        "no-unused-existing-resources": {
+          "level": "warning"
+        },
+        "outputs-should-not-contain-secrets": {
+          "level": "error"
+        },
         "prefer-interpolation": {
+          "level": "warning"
+        },
+        "prefer-unquoted-property-names": {
           "level": "warning"
         },
         "secure-parameter-default": {
           "level": "error"
         },
+        "secure-params-in-nested-deploy": {
+          "level": "warning"
+        },
+        "secure-secrets-in-params": {
+          "level": "error"
+        },
         "simplify-interpolation": {
           "level": "warning"
+        },
+        "simplify-json-null": {
+          "level": "warning"
+        },
+        "use-parent-property": {
+          "level": "warning"
+        },
+        "use-recent-api-versions": {
+          "level": "warning"
+        },
+        "use-resource-symbol-reference": {
+          "level": "warning"
+        },
+        "use-safe-access": {
+          "level": "warning"
+        },
+        "use-secure-value-for-secure-inputs": {
+          "level": "warning"
+        },
+        "use-stable-resource-identifiers": {
+          "level": "off"
+        },
+        "use-stable-vm-image": {
+          "level": "warning"
+        },
+        "protect-commandtoexecute-secrets": {
+          "level": "warning"
+        },
+        "no-deployments-resources": {
+          "level": "warning"
+        },
+        "no-unnecessary-dependson": {
+          "level": "warning"
+        },
+        "decompiler-cleanup": {
+          "level": "warning"
+        },
+        "what-if-short-circuiting": {
+          "level": "off"
+        },
+        "max-outputs": {
+          "level": "error"
+        },
+        "max-params": {
+          "level": "error"
+        },
+        "max-resources": {
+          "level": "error"
+        },
+        "max-variables": {
+          "level": "error"
+        },
+        "max-asserts": {
+          "level": "error"
         }
       }
     }

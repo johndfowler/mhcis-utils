@@ -67,8 +67,8 @@ param instance string = '01'
 @description('Network configuration for the platform')
 param networkConfig NetworkConfig = {
   vnetAddressPrefix: '10.0.0.0/16'
-  subnetAddressPrefix: '10.0.1.0/24'
-  privateEndpointSubnetPrefix: '10.0.2.0/24'
+  subnetAddressPrefix: '10.0.0.0/23'
+  privateEndpointSubnetPrefix: '10.0.2.0/23'
 }
 
 @description('Monitoring and observability configuration')
@@ -85,7 +85,7 @@ param monitoringService ServiceConfig = {
     cpu: '0.5'
     memory: '1Gi'
   }
-  image: 'louislam/uptime-kuma:1.23.11'
+  image: 'louislam/uptime-kuma:1.23.13'
   port: 3001
 }
 
@@ -96,7 +96,7 @@ param visualizationService ServiceConfig = {
     cpu: '0.5'
     memory: '1Gi'
   }
-  image: 'grafana/grafana:10.4.0'
+  image: 'grafana/grafana:11.0.0'
   port: 3000
 }
 
@@ -107,7 +107,7 @@ param fileManagementService ServiceConfig = {
     cpu: '0.25'
     memory: '0.5Gi'
   }
-  image: 'filebrowser/filebrowser:v2.27.0'
+  image: 'filebrowser/filebrowser:v2.31.0'
   port: 80
 }
 
@@ -118,7 +118,7 @@ param developmentService ServiceConfig = {
     cpu: '0.5'
     memory: '1Gi'
   }
-  image: 'codercom/code-server:4.20.1'
+  image: 'codercom/code-server:4.23.1'
   port: 8080
 }
 
@@ -127,6 +127,9 @@ param isTestMode bool = environment == 'dev' || environment == 'test'
 
 @description('Enable private endpoints for enhanced security')
 param enablePrivateEndpoints bool = environment == 'prod' || environment == 'staging'
+
+@description('Unique GUID for generating fresh Key Vault names on every deployment')
+param deploymentGuid string = newGuid()
 
 // ===========================================
 // Variables Section
@@ -160,6 +163,9 @@ var resourceNames = {
   fileManagement: 'ca-filebrowser-${environment}-${regionAbbr}-${instance}'
   development: 'ca-codeserver-${environment}-${regionAbbr}-${instance}'
 }
+
+// ✅ Fresh, compliant Key Vault name every deployment; no symbols; starts with letters; <=24 chars
+var kvName = 'kv${uniqueString(subscription().id, resourceGroup().id, deploymentGuid)}'
 
 var storageMountName = 'platform-data'
 var storageFileDataSmbShareContributorRoleId = '0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb'
@@ -205,7 +211,7 @@ resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 }
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: resourceNames.keyVault
+  name: kvName
   location: location
   tags: commonTags
   properties: {
@@ -220,7 +226,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enabledForTemplateDeployment: true
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
-    enablePurgeProtection: true
+    enablePurgeProtection: false
     publicNetworkAccess: 'Enabled'
     accessPolicies: [
       {
@@ -292,7 +298,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   properties: {
     accessTier: 'Hot'
     allowBlobPublicAccess: false
-    allowSharedKeyAccess: false // Enhanced security - disable key-based access
+    allowSharedKeyAccess: true // Required for Container Apps file share mounting
     largeFileSharesState: 'Enabled'
     minimumTlsVersion: 'TLS1_2'
     supportsHttpsTrafficOnly: true
@@ -354,7 +360,7 @@ resource containerAppsEnvironment 'Microsoft.App/managedEnvironments@2024-03-01'
   }
 }
 
-// Environment storage using managed identity
+// Environment storage - Note: Container Apps still requires account keys for Azure Files
 resource environmentStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
   parent: containerAppsEnvironment
   name: storageMountName
@@ -362,6 +368,7 @@ resource environmentStorage 'Microsoft.App/managedEnvironments/storages@2024-03-
     azureFile: {
       accessMode: 'ReadWrite'
       accountName: storageAccount.name
+      accountKey: storageAccount.listKeys().keys[0].value
       shareName: resourceNames.fileShare
     }
   }
@@ -379,7 +386,7 @@ resource grafanaPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = 
   parent: keyVault
   name: 'grafana-admin-password'
   properties: {
-    value: 'ChangeMe123!${uniqueString(resourceGroup().id)}'
+    value: 'GrafanaSecure${uniqueString(resourceGroup().id, 'grafana')}!'
     contentType: 'text/plain'
   }
 }
@@ -388,7 +395,7 @@ resource codeServerPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01'
   parent: keyVault
   name: 'codeserver-password'
   properties: {
-    value: 'DevSecure456!${uniqueString(resourceGroup().id)}'
+    value: 'CodeServerSecure${uniqueString(resourceGroup().id, 'codeserver')}!'
     contentType: 'text/plain'
   }
 }
@@ -434,7 +441,7 @@ resource monitoringApp 'Microsoft.App/containerApps@2024-03-01' = if (monitoring
           env: monitoringConfig.enableApplicationInsights ? [
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-              value: applicationInsights.properties.ConnectionString
+              value: applicationInsights!.properties.ConnectionString
             }
           ] : []
           volumeMounts: [
@@ -768,3 +775,6 @@ output managementCommands object = {
   connectToKeyVault: 'az keyvault secret list --vault-name ${keyVault.name}'
   storageAccountKey: 'Disabled - Using managed identity authentication'
 }
+
+@description('Generated Key Vault name for this deployment')
+output keyVaultName string = kvName

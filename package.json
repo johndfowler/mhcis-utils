@@ -1,0 +1,45 @@
+{
+  "name": "shade-platform",
+  "version": "1.0.0",
+  "description": "Shade - Cloud-Native Utility Platform with monitoring, visualization, file management, and remote development capabilities",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/johndfowler/mhcis-utils.git"
+  },
+  "keywords": ["azure", "container-apps", "bicep", "monitoring", "uptime-kuma", "grafana", "cloud-native"],
+  "author": "John Fowler",
+  "license": "MIT",
+  "scripts": {
+    "lint": "npm run lint:bicep && npm run lint:json && npm run lint:yaml && npm run lint:markdown",
+    "lint:bicep": "pwsh -Command \"Get-ChildItem -Path 'infra' -Filter '*.bicep' -Recurse | ForEach-Object { az bicep lint --file $_.FullName }\"",
+    "lint:json": "prettier --check \"**/*.json\"",
+    "lint:yaml": "prettier --check \"**/*.{yaml,yml}\"",
+    "lint:markdown": "prettier --check \"**/*.md\"",
+    "format": "prettier --write \"**/*.{json,yaml,yml,md}\"",
+    "format:check": "prettier --check \"**/*.{json,yaml,yml,md}\"",
+    "pre-commit": "lint-staged",
+    "validate": "npm run lint && az bicep build --file infra/main.bicep",
+    "test": "npm run test:infra && npm run test:scripts",
+    "test:infra": "pwsh -ExecutionPolicy Bypass -File tests/infra/run-tests.ps1",
+    "test:scripts": "pwsh -ExecutionPolicy Bypass -File tests/scripts/run-tests.ps1",
+    "test:ci": "npm run test:infra && npm run test:scripts -- --ci",
+    "dev:setup": "pwsh -ExecutionPolicy Bypass -File scripts/setup-dev-env.ps1",
+    "azure:deploy": "azd up",
+    "azure:down": "azd down --purge"
+  },
+  "devDependencies": {
+    "@prettier/plugin-xml": "^3.4.1",
+    "husky": "^9.1.5",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3",
+    "prettier-plugin-organize-imports": "^4.0.0"
+  },
+  "lint-staged": {
+    "*.{json,yaml,yml,md}": ["prettier --write"],
+    "*.bicep": ["pwsh -Command \"az bicep lint --file $_\""]
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}

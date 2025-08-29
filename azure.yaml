@@ -1,12 +1,12 @@
 # azure.yaml
-# Azure Developer CLI (azd) configuration for Cloud-Native DevOps Platform
+# Azure Developer CLI (azd) configuration for Shade - Cloud-Native Utility Platform
 
-name: cloud-devops-platform
+name: shade-platform
 metadata:
-  template: cloud-devops-platform@0.0.1-beta
+  template: shade-platform@1.0.0-beta
 
 # Configure the Azure resources
 infra:
   provider: bicep
   path: ./infra
-  resourceGroupName: "rg-devops-platform"
+  resourceGroupName: "rg-shade-dev-eus-01"

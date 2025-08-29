@@ -31,19 +31,21 @@ if [ -f ".git/hooks/pre-commit" ]; then
 fi
 
 # Copy our hooks
-if [ -f ".git/hooks/pre-commit.ps1" ]; then
-    echo "  ✅ PowerShell pre-commit hook already exists"
-else
+if [ -f "scripts/pre-commit.ps1" ]; then
     echo "  📝 Installing PowerShell pre-commit hook..."
-    cp ".git/hooks/pre-commit.ps1" ".git/hooks/pre-commit.ps1"
+    cp "scripts/pre-commit.ps1" ".git/hooks/pre-commit.ps1"
+    echo "  ✅ PowerShell pre-commit hook installed"
+else
+    echo "  ❌ PowerShell pre-commit hook not found in scripts/ directory"
 fi
 
-if [ -f ".git/hooks/pre-commit" ]; then
-    echo "  ✅ Bash pre-commit hook already exists"
-else
+if [ -f "scripts/pre-commit.sh" ]; then
     echo "  📝 Installing Bash pre-commit hook..."
-    cp ".git/hooks/pre-commit" ".git/hooks/pre-commit"
+    cp "scripts/pre-commit.sh" ".git/hooks/pre-commit"
     chmod +x ".git/hooks/pre-commit"
+    echo "  ✅ Bash pre-commit hook installed"
+else
+    echo "  ❌ Bash pre-commit hook not found in scripts/ directory"
 fi
 
 echo -e "${GREEN}✅ Git hooks configured${NC}"
@@ -76,11 +78,19 @@ else
     echo -e "  ${YELLOW}⚠️  PowerShell not found (optional for Windows development)${NC}"
 fi
 
-# Check Node.js for markdownlint
+# Check Node.js for Prettier and Husky
 if command -v node &> /dev/null; then
     echo -e "  ${GREEN}✅ Node.js is available$(node --version)${NC}"
 else
-    echo -e "  ${YELLOW}⚠️  Node.js not found (optional for markdownlint)${NC}"
+    echo -e "  ${RED}❌ Node.js not found${NC}"
+    echo "    Install from: https://nodejs.org/"
+fi
+
+# Check npm
+if command -v npm &> /dev/null; then
+    echo -e "  ${GREEN}✅ npm is available$(npm --version)${NC}"
+else
+    echo -e "  ${RED}❌ npm not found (should come with Node.js)${NC}"
 fi
 
 # ===========================================
@@ -150,16 +160,21 @@ echo "📋 What's configured:"
 echo "  • Git pre-commit hooks for code quality"
 echo "  • Bicep linting and validation"
 echo "  • JSON/YAML validation"
+echo "  • Prettier code formatting"
+echo "  • Husky Git hooks"
+echo "  • Lint-staged for automated formatting"
 echo "  • CI/CD workflows for GitHub Actions"
 echo ""
 echo "🚀 Next steps:"
-echo "  1. Run './scripts/lint.sh' to test linting"
-echo "  2. Try 'az bicep build --file infra/main.bicep' to test builds"
-echo "  3. Make a test commit to validate Git hooks"
-echo "  4. Push to GitHub to test CI/CD workflows"
+echo "  1. Run 'npm install' to install Prettier and Husky"
+echo "  2. Run 'npm run format' to format all files"
+echo "  3. Run 'npm run validate' to test all validations"
+echo "  4. Make a test commit to validate Git hooks"
+echo "  5. Push to GitHub to test CI/CD workflows"
 echo ""
 echo "📚 Useful commands:"
-echo "  • az bicep lint --file infra/main.bicep    # Lint Bicep files"
-echo "  • az bicep build --file infra/main.bicep   # Build templates"
-echo "  • ./scripts/lint.sh                       # Run all validations"
+echo "  • npm run format                           # Format all files with Prettier"
+echo "  • npm run lint                            # Run all linting checks"
+echo "  • npm run validate                        # Run comprehensive validation"
+echo "  • az bicep build --file infra/main.bicep   # Build Bicep templates"
 echo "  • azd up                                  # Deploy with Azure Developer CLI"

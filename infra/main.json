@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.37.4.10188",
-      "templateHash": "17022211762028707898"
+      "templateHash": "8547560797720330160"
     }
   },
   "definitions": {
@@ -131,8 +131,8 @@
       "$ref": "#/definitions/NetworkConfig",
       "defaultValue": {
         "vnetAddressPrefix": "10.0.0.0/16",
-        "subnetAddressPrefix": "10.0.1.0/24",
-        "privateEndpointSubnetPrefix": "10.0.2.0/24"
+        "subnetAddressPrefix": "10.0.0.0/23",
+        "privateEndpointSubnetPrefix": "10.0.2.0/23"
       },
       "metadata": {
         "description": "Network configuration for the platform"
@@ -157,7 +157,7 @@
           "cpu": "0.5",
           "memory": "1Gi"
         },
-        "image": "louislam/uptime-kuma:1.23.11",
+        "image": "louislam/uptime-kuma:1.23.13",
         "port": 3001
       },
       "metadata": {
@@ -172,7 +172,7 @@
           "cpu": "0.5",
           "memory": "1Gi"
         },
-        "image": "grafana/grafana:10.4.0",
+        "image": "grafana/grafana:11.0.0",
         "port": 3000
       },
       "metadata": {
@@ -187,7 +187,7 @@
           "cpu": "0.25",
           "memory": "0.5Gi"
         },
-        "image": "filebrowser/filebrowser:v2.27.0",
+        "image": "filebrowser/filebrowser:v2.31.0",
         "port": 80
       },
       "metadata": {
@@ -202,7 +202,7 @@
           "cpu": "0.5",
           "memory": "1Gi"
         },
-        "image": "codercom/code-server:4.20.1",
+        "image": "codercom/code-server:4.23.1",
         "port": 8080
       },
       "metadata": {
@@ -221,6 +221,13 @@
       "defaultValue": "[or(equals(parameters('environment'), 'prod'), equals(parameters('environment'), 'staging'))]",
       "metadata": {
         "description": "Enable private endpoints for enhanced security"
+      }
+    },
+    "deploymentGuid": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "metadata": {
+        "description": "Unique GUID for generating fresh Key Vault names on every deployment"
       }
     }
   },
@@ -251,6 +258,7 @@
       "fileManagement": "[format('ca-filebrowser-{0}-{1}-{2}', parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
       "development": "[format('ca-codeserver-{0}-{1}-{2}', parameters('environment'), parameters('regionAbbr'), parameters('instance'))]"
     },
+    "kvName": "[format('kv{0}', uniqueString(subscription().id, resourceGroup().id, parameters('deploymentGuid')))]",
     "storageMountName": "platform-data",
     "storageFileDataSmbShareContributorRoleId": "0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb"
   },
@@ -294,7 +302,7 @@
     "keyVault": {
       "type": "Microsoft.KeyVault/vaults",
       "apiVersion": "2023-07-01",
-      "name": "[variables('resourceNames').keyVault]",
+      "name": "[variables('kvName')]",
       "location": "[parameters('location')]",
       "tags": "[variables('commonTags')]",
       "properties": {
@@ -309,7 +317,7 @@
         "enabledForTemplateDeployment": true,
         "enableSoftDelete": true,
         "softDeleteRetentionInDays": 7,
-        "enablePurgeProtection": true,
+        "enablePurgeProtection": false,
         "publicNetworkAccess": "Enabled",
         "accessPolicies": [
           {
@@ -384,7 +392,7 @@
       "properties": {
         "accessTier": "Hot",
         "allowBlobPublicAccess": false,
-        "allowSharedKeyAccess": false,
+        "allowSharedKeyAccess": true,
         "largeFileSharesState": "Enabled",
         "minimumTlsVersion": "TLS1_2",
         "supportsHttpsTrafficOnly": true,
@@ -458,6 +466,7 @@
         "azureFile": {
           "accessMode": "ReadWrite",
           "accountName": "[variables('resourceNames').storageAccount]",
+          "accountKey": "[listKeys('storageAccount', '2023-01-01').keys[0].value]",
           "shareName": "[variables('resourceNames').fileShare]"
         }
       },
@@ -471,9 +480,9 @@
     "grafanaPasswordSecret": {
       "type": "Microsoft.KeyVault/vaults/secrets",
       "apiVersion": "2023-07-01",
-      "name": "[format('{0}/{1}', variables('resourceNames').keyVault, 'grafana-admin-password')]",
+      "name": "[format('{0}/{1}', variables('kvName'), 'grafana-admin-password')]",
       "properties": {
-        "value": "[format('ChangeMe123!{0}', uniqueString(resourceGroup().id))]",
+        "value": "[format('GrafanaSecure{0}!', uniqueString(resourceGroup().id, 'grafana'))]",
         "contentType": "text/plain"
       },
       "dependsOn": [
@@ -483,9 +492,9 @@
     "codeServerPasswordSecret": {
       "type": "Microsoft.KeyVault/vaults/secrets",
       "apiVersion": "2023-07-01",
-      "name": "[format('{0}/{1}', variables('resourceNames').keyVault, 'codeserver-password')]",
+      "name": "[format('{0}/{1}', variables('kvName'), 'codeserver-password')]",
       "properties": {
-        "value": "[format('DevSecure456!{0}', uniqueString(resourceGroup().id))]",
+        "value": "[format('CodeServerSecure{0}!', uniqueString(resourceGroup().id, 'codeserver'))]",
         "contentType": "text/plain"
       },
       "dependsOn": [
@@ -862,7 +871,7 @@
       "value": {
         "resourceGroupName": "[resourceGroup().name]",
         "managedIdentityId": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity)]",
-        "keyVaultName": "[variables('resourceNames').keyVault]",
+        "keyVaultName": "[variables('kvName')]",
         "storageAccountName": "[variables('resourceNames').storageAccount]",
         "containerAppsEnvironmentName": "[variables('resourceNames').containerAppsEnvironment]",
         "applicationInsightsName": "[if(parameters('monitoringConfig').enableApplicationInsights, variables('resourceNames').applicationInsights, '')]",
@@ -888,9 +897,16 @@
       "value": {
         "deleteResourceGroup": "[format('az group delete --name {0} --yes --no-wait', resourceGroup().name)]",
         "viewLogs": "[if(parameters('monitoringConfig').enableApplicationInsights, format('az monitor app-insights query --app {0} --analytics-query \"requests | limit 10\"', variables('resourceNames').applicationInsights), '')]",
-        "connectToKeyVault": "[format('az keyvault secret list --vault-name {0}', variables('resourceNames').keyVault)]",
+        "connectToKeyVault": "[format('az keyvault secret list --vault-name {0}', variables('kvName'))]",
         "storageAccountKey": "Disabled - Using managed identity authentication"
       }
+    },
+    "keyVaultName": {
+      "type": "string",
+      "metadata": {
+        "description": "Generated Key Vault name for this deployment"
+      },
+      "value": "[variables('kvName')]"
     }
   }
 }

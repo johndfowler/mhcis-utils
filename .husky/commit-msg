@@ -1,0 +1,37 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "📝 Running commit message validation..."
+
+# Get the commit message
+commit_regex='^(feat|fix|docs|style|refactor|perf|test|chore|ci|build)(\(.+\))?: .{1,50}'
+
+if ! grep -qE "$commit_regex" "$1"; then
+  echo "❌ Invalid commit message format!"
+  echo ""
+  echo "📋 Commit message format should be:"
+  echo "   <type>[optional scope]: <description>"
+  echo ""
+  echo "📝 Valid types:"
+  echo "   • feat:     A new feature"
+  echo "   • fix:      A bug fix"
+  echo "   • docs:     Documentation changes"
+  echo "   • style:    Code style changes (formatting, etc.)"
+  echo "   • refactor: Code refactoring"
+  echo "   • perf:     Performance improvements"
+  echo "   • test:     Adding or updating tests"
+  echo "   • chore:    Maintenance tasks"
+  echo "   • ci:       CI/CD changes"
+  echo "   • build:    Build system changes"
+  echo ""
+  echo "✅ Examples:"
+  echo "   feat: add Key Vault random name generation"
+  echo "   fix(bicep): resolve BCP318 warning with non-null assertion"
+  echo "   docs: update README with deployment instructions"
+  echo "   chore: update container image versions"
+  echo ""
+  exit 1
+fi
+
+echo "✅ Commit message format is valid!"
+exit 0

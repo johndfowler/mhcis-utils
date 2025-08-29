@@ -1,0 +1,71 @@
+# Prettier ignore patterns
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+*.min.js
+*.min.css
+
+# Generated files
+*.generated.*
+*.g.*
+infra/main.json
+infra/*.compiled.json
+
+# Azure artifacts
+.azure/
+*.zip
+*.nupkg
+
+# Logs
+*.log
+logs/
+
+# IDE files
+.vscode/settings.json
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Large data files
+*.csv
+*.xlsx
+*.pdf
+
+# Binary files
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Images (unless documentation)
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.svg
+*.ico
+!assets/**/*.svg
+!assets/**/*.png
+!**/logo/**/*
+
+# Bicep compiled outputs
+*.json
+!package.json
+!tsconfig.json
+!.vscode/*.json
+!infra/main.parameters.json
+!.bicepconfig.json
+!.markdownlint.json

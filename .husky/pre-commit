@@ -1,0 +1,48 @@
+#!/usr/bin/env sh
+
+echo "🔍 Running pre-commit validation..."
+
+# Run lint-staged for file formatting and linting
+npx lint-staged
+
+# Exit if lint-staged fails
+if [ $? -ne 0 ]; then
+  echo "❌ Lint-staged checks failed!"
+  exit 1
+fi
+
+# Run comprehensive validation
+echo "🧪 Running comprehensive validation..."
+
+# Validate Bicep templates
+if [ -f "infra/main.bicep" ]; then
+  echo "📝 Validating Bicep template..."
+  az bicep build --file infra/main.bicep --stdout > /dev/null
+  if [ $? -ne 0 ]; then
+    echo "❌ Bicep template validation failed!"
+    exit 1
+  fi
+  echo "✅ Bicep template validation passed"
+fi
+
+# Run our custom lint script
+if [ -f "scripts/lint.ps1" ]; then
+  echo "🔍 Running PowerShell linting..."
+  pwsh -ExecutionPolicy Bypass -File scripts/lint.ps1 -CI
+  if [ $? -ne 0 ]; then
+    echo "❌ PowerShell linting failed!"
+    exit 1
+  fi
+  echo "✅ PowerShell linting passed"
+elif [ -f "scripts/lint.sh" ]; then
+  echo "🔍 Running Bash linting..."
+  bash scripts/lint.sh --ci
+  if [ $? -ne 0 ]; then
+    echo "❌ Bash linting failed!"
+    exit 1
+  fi
+  echo "✅ Bash linting passed"
+fi
+
+echo "✅ All pre-commit checks passed!"
+exit 0

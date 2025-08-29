@@ -61,7 +61,20 @@ foreach ($file in $JsonFiles) {
     Write-Host "  🔍 Validating: $($file.FullName)" -ForegroundColor Gray
 
     try {
-        Get-Content $file.FullName -Raw | ConvertFrom-Json | Out-Null
+        $jsonContent = Get-Content $file.FullName -Raw
+        # Try to parse as regular JSON first
+        try {
+            $jsonContent | ConvertFrom-Json | Out-Null
+        }
+        catch {
+            # If regular parsing fails, try with AsHashTable for edge cases
+            try {
+                $jsonContent | ConvertFrom-Json -AsHashTable | Out-Null
+            }
+            catch {
+                throw $_.Exception.Message
+            }
+        }
         Write-Host "  ✅ $($file.Name) is valid JSON" -ForegroundColor Green
     }
     catch {
