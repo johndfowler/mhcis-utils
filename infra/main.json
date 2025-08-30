@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.37.4.10188",
-      "templateHash": "8547560797720330160"
+      "templateHash": "12288572007391038306"
     }
   },
   "definitions": {
@@ -223,11 +223,12 @@
         "description": "Enable private endpoints for enhanced security"
       }
     },
-    "deploymentGuid": {
+    "deployerObjectId": {
       "type": "string",
-      "defaultValue": "[newGuid()]",
+      "defaultValue": "",
+      "minLength": 0,
       "metadata": {
-        "description": "Unique GUID for generating fresh Key Vault names on every deployment"
+        "description": "Optional: Object ID of the deployer (user or service principal) to grant temporary secret permissions for initial secret creation"
       }
     }
   },
@@ -258,7 +259,7 @@
       "fileManagement": "[format('ca-filebrowser-{0}-{1}-{2}', parameters('environment'), parameters('regionAbbr'), parameters('instance'))]",
       "development": "[format('ca-codeserver-{0}-{1}-{2}', parameters('environment'), parameters('regionAbbr'), parameters('instance'))]"
     },
-    "kvName": "[format('kv{0}', uniqueString(subscription().id, resourceGroup().id, parameters('deploymentGuid')))]",
+    "kvName": "[format('kv{0}', toLower(take(uniqueString(resourceGroup().id), 16)))]",
     "storageMountName": "platform-data",
     "storageFileDataSmbShareContributorRoleId": "0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb"
   },
@@ -316,22 +317,10 @@
         "enabledForDiskEncryption": false,
         "enabledForTemplateDeployment": true,
         "enableSoftDelete": true,
-        "softDeleteRetentionInDays": 7,
-        "enablePurgeProtection": false,
+        "softDeleteRetentionInDays": 90,
+        "enablePurgeProtection": true,
         "publicNetworkAccess": "Enabled",
-        "accessPolicies": [
-          {
-            "tenantId": "[tenant().tenantId]",
-            "objectId": "[reference('managedIdentity').principalId]",
-            "permissions": {
-              "secrets": [
-                "get",
-                "list",
-                "set"
-              ]
-            }
-          }
-        ]
+        "accessPolicies": "[concat(createArray(createObject('tenantId', tenant().tenantId, 'objectId', reference('managedIdentity').principalId, 'permissions', createObject('secrets', createArray('get', 'list')))), if(empty(parameters('deployerObjectId')), createArray(), createArray(createObject('tenantId', tenant().tenantId, 'objectId', parameters('deployerObjectId'), 'permissions', createObject('secrets', createArray('get', 'list', 'set'))))))]"
       },
       "dependsOn": [
         "managedIdentity"
@@ -478,6 +467,7 @@
       ]
     },
     "grafanaPasswordSecret": {
+      "condition": "[not(empty(parameters('deployerObjectId')))]",
       "type": "Microsoft.KeyVault/vaults/secrets",
       "apiVersion": "2023-07-01",
       "name": "[format('{0}/{1}', variables('kvName'), 'grafana-admin-password')]",
@@ -490,6 +480,7 @@
       ]
     },
     "codeServerPasswordSecret": {
+      "condition": "[not(empty(parameters('deployerObjectId')))]",
       "type": "Microsoft.KeyVault/vaults/secrets",
       "apiVersion": "2023-07-01",
       "name": "[format('{0}/{1}', variables('kvName'), 'codeserver-password')]",
@@ -605,13 +596,7 @@
               }
             ]
           },
-          "secrets": [
-            {
-              "name": "grafana-password",
-              "keyVaultUrl": "[format('{0}secrets/grafana-admin-password', reference('keyVault').vaultUri)]",
-              "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity)]"
-            }
-          ]
+          "secrets": "[if(empty(parameters('deployerObjectId')), createArray(), createArray(createObject('name', 'grafana-password', 'keyVaultUrl', format('{0}secrets/grafana-admin-password', reference('keyVault').vaultUri), 'identity', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity))))]"
         },
         "template": {
           "containers": [
@@ -622,16 +607,7 @@
                 "cpu": "[json(if(parameters('isTestMode'), '0.25', parameters('visualizationService').resources.cpu))]",
                 "memory": "[if(parameters('isTestMode'), '0.5Gi', parameters('visualizationService').resources.memory)]"
               },
-              "env": [
-                {
-                  "name": "GF_SECURITY_ADMIN_USER",
-                  "value": "admin"
-                },
-                {
-                  "name": "GF_SECURITY_ADMIN_PASSWORD",
-                  "secretRef": "grafana-password"
-                }
-              ],
+              "env": "[concat(createArray(createObject('name', 'GF_SECURITY_ADMIN_USER', 'value', 'admin')), if(empty(parameters('deployerObjectId')), createArray(), createArray(createObject('name', 'GF_SECURITY_ADMIN_PASSWORD', 'secretRef', 'grafana-password'))))]",
               "volumeMounts": [
                 {
                   "volumeName": "[variables('storageMountName')]",
@@ -669,7 +645,6 @@
       "dependsOn": [
         "containerAppsEnvironment",
         "environmentStorage",
-        "grafanaPasswordSecret",
         "keyVault",
         "managedIdentity"
       ]
@@ -784,13 +759,7 @@
               }
             ]
           },
-          "secrets": [
-            {
-              "name": "codeserver-password",
-              "keyVaultUrl": "[format('{0}secrets/codeserver-password', reference('keyVault').vaultUri)]",
-              "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity)]"
-            }
-          ]
+          "secrets": "[if(empty(parameters('deployerObjectId')), createArray(), createArray(createObject('name', 'codeserver-password', 'keyVaultUrl', format('{0}secrets/codeserver-password', reference('keyVault').vaultUri), 'identity', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('resourceNames').managedIdentity))))]"
         },
         "template": {
           "containers": [
@@ -801,12 +770,7 @@
                 "cpu": "[json(if(parameters('isTestMode'), '0.25', parameters('developmentService').resources.cpu))]",
                 "memory": "[if(parameters('isTestMode'), '0.5Gi', parameters('developmentService').resources.memory)]"
               },
-              "env": [
-                {
-                  "name": "PASSWORD",
-                  "secretRef": "codeserver-password"
-                }
-              ],
+              "env": "[if(empty(parameters('deployerObjectId')), createArray(), createArray(createObject('name', 'PASSWORD', 'secretRef', 'codeserver-password')))]",
               "volumeMounts": [
                 {
                   "volumeName": "[variables('storageMountName')]",
@@ -842,7 +806,6 @@
         }
       },
       "dependsOn": [
-        "codeServerPasswordSecret",
         "containerAppsEnvironment",
         "environmentStorage",
         "keyVault",
