@@ -128,8 +128,7 @@ param isTestMode bool = environment == 'dev' || environment == 'test'
 @description('Enable private endpoints for enhanced security')
 param enablePrivateEndpoints bool = environment == 'prod' || environment == 'staging'
 
-@description('Unique GUID for generating fresh Key Vault names on every deployment')
-param deploymentGuid string = newGuid()
+// Note: Avoid nondeterministic names per Bicep best practices; keep names reproducible across deployments.
 
 // ===========================================
 // Variables Section
@@ -165,7 +164,12 @@ var resourceNames = {
 }
 
 // ✅ Fresh, compliant Key Vault name every deployment; no symbols; starts with letters; <=24 chars
-var kvName = 'kv${uniqueString(subscription().id, resourceGroup().id, deploymentGuid)}'
+// Deterministic Key Vault name (<= 24 chars) based on resource group id
+var kvName = 'kv${toLower(take(uniqueString(resourceGroup().id), 16))}'
+
+@description('Optional: Object ID of the deployer (user or service principal) to grant temporary secret permissions for initial secret creation')
+@minLength(0)
+param deployerObjectId string = ''
 
 var storageMountName = 'platform-data'
 var storageFileDataSmbShareContributorRoleId = '0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb'
@@ -220,29 +224,39 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
       name: 'standard'
     }
     tenantId: tenant().tenantId
+    // Using access policies model by default for compatibility
     enableRbacAuthorization: false
     enabledForDeployment: false
     enabledForDiskEncryption: false
     enabledForTemplateDeployment: true
+    // Soft delete defaults to true; set retention and enable purge protection to satisfy common policies
     enableSoftDelete: true
-    softDeleteRetentionInDays: 7
-    enablePurgeProtection: false
+    softDeleteRetentionInDays: 90
+    enablePurgeProtection: true
     publicNetworkAccess: 'Enabled'
-    accessPolicies: [
+    accessPolicies: concat([
+      // Managed identity for runtime access from apps
       {
         tenantId: tenant().tenantId
         objectId: managedIdentity.properties.principalId
         permissions: {
-          secrets: [
-            'get'
-            'list'
-            'set'
-          ]
+          secrets: [ 'get', 'list' ]
         }
       }
-    ]
+    ], empty(deployerObjectId) ? [] : [
+      // Optional: grant deployer permission to create initial secrets
+      {
+        tenantId: tenant().tenantId
+        objectId: deployerObjectId
+        permissions: {
+          secrets: [ 'get', 'list', 'set' ]
+        }
+      }
+    ])
   }
 }
+
+// Removed separate accessPolicies resource; included inline during KV creation
 
 // ===========================================
 // Monitoring & Observability Resources
@@ -382,7 +396,8 @@ resource environmentStorage 'Microsoft.App/managedEnvironments/storages@2024-03-
 // Key Vault Secrets
 // ===========================================
 
-resource grafanaPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+// Create initial secrets only when deployerObjectId is provided (to ensure data plane permissions exist)
+resource grafanaPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(deployerObjectId)) {
   parent: keyVault
   name: 'grafana-admin-password'
   properties: {
@@ -391,7 +406,7 @@ resource grafanaPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = 
   }
 }
 
-resource codeServerPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = {
+resource codeServerPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(deployerObjectId)) {
   parent: keyVault
   name: 'codeserver-password'
   properties: {
@@ -505,13 +520,13 @@ resource grafanaApp 'Microsoft.App/containerApps@2024-03-01' = if (visualization
           }
         ]
       }
-      secrets: [
+      secrets: (empty(deployerObjectId) ? [] : [
         {
           name: 'grafana-password'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/grafana-admin-password'
           identity: managedIdentity.id
         }
-      ]
+      ])
     }
     template: {
       containers: [
@@ -522,16 +537,17 @@ resource grafanaApp 'Microsoft.App/containerApps@2024-03-01' = if (visualization
             cpu: json(isTestMode ? '0.25' : visualizationService.resources.cpu)
             memory: isTestMode ? '0.5Gi' : visualizationService.resources.memory
           }
-          env: [
+          env: concat([
             {
               name: 'GF_SECURITY_ADMIN_USER'
               value: 'admin'
             }
+          ], empty(deployerObjectId) ? [] : [
             {
               name: 'GF_SECURITY_ADMIN_PASSWORD'
               secretRef: 'grafana-password'
             }
-          ]
+          ])
           volumeMounts: [
             {
               volumeName: storageMountName
@@ -568,7 +584,6 @@ resource grafanaApp 'Microsoft.App/containerApps@2024-03-01' = if (visualization
   }
   dependsOn: [
     environmentStorage
-    grafanaPasswordSecret
   ]
 }
 
@@ -675,13 +690,13 @@ resource codeServerApp 'Microsoft.App/containerApps@2024-03-01' = if (developmen
           }
         ]
       }
-      secrets: [
+      secrets: (empty(deployerObjectId) ? [] : [
         {
           name: 'codeserver-password'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/codeserver-password'
           identity: managedIdentity.id
         }
-      ]
+      ])
     }
     template: {
       containers: [
@@ -692,12 +707,12 @@ resource codeServerApp 'Microsoft.App/containerApps@2024-03-01' = if (developmen
             cpu: json(isTestMode ? '0.25' : developmentService.resources.cpu)
             memory: isTestMode ? '0.5Gi' : developmentService.resources.memory
           }
-          env: [
+          env: (empty(deployerObjectId) ? [] : [
             {
               name: 'PASSWORD'
               secretRef: 'codeserver-password'
             }
-          ]
+          ])
           volumeMounts: [
             {
               volumeName: storageMountName
@@ -734,7 +749,6 @@ resource codeServerApp 'Microsoft.App/containerApps@2024-03-01' = if (developmen
   }
   dependsOn: [
     environmentStorage
-    codeServerPasswordSecret
   ]
 }
 

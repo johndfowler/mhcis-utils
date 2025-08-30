@@ -41,7 +41,7 @@
     },
     "visualizationService": {
       "value": {
-        "enabled": false,
+        "enabled": true,
         "resources": {
           "cpu": "0.5",
           "memory": "1Gi"
@@ -52,7 +52,7 @@
     },
     "fileManagementService": {
       "value": {
-        "enabled": false,
+        "enabled": true,
         "resources": {
           "cpu": "0.25",
           "memory": "0.5Gi"
@@ -63,7 +63,7 @@
     },
     "developmentService": {
       "value": {
-        "enabled": false,
+        "enabled": true,
         "resources": {
           "cpu": "0.5",
           "memory": "1Gi"
@@ -77,6 +77,9 @@
     },
     "enablePrivateEndpoints": {
       "value": false
+    },
+    "deployerObjectId": {
+      "value": ""
     }
   }
 }
